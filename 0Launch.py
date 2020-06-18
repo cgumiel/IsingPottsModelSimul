@@ -67,7 +67,7 @@ def step(spin_input, t_input, J_input, B_input, L_input):
     #E = -J*SUM(s(i,j)*vecinos(i,j)) -H SUM(s(i,j))
     vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
     #Calculate the change in energy of flipping a spin
-    DeltaE = 2 * (J_input*(spin_input * vecinos) + B_input*spin_input)
+    DeltaE = 2 * (J_input*(np.multiply(spin_input, vecinos)) + B_input*spin_input)
     #calculate the transition probabilities
     p_trans = np.exp(-DeltaE/t_input)
     # Decide wich transition will occur
@@ -105,15 +105,6 @@ def sub_step_recursive_wolff(spin_input, transitions, link_up, link_right, t_inp
 
 def step_wolff(spin_input, t_input, J_input, B_input, L_input):
 
-    # Calculating the total spin of neighbouring cells
-    spin_anterior_x = np.roll(spin_input,-1, axis=1)
-    spin_anterior_y = np.roll(spin_input,-1, axis=0)
-    spin_posterior_x = np.roll(spin_input,1, axis=1)
-    spin_posterior_y = np.roll(spin_input,1, axis=0)
-    vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
-    #Calculate the change in energy of flipping a spin
-    DeltaE = 2 * (J_input*(spin_input * vecinos) + B_input*spin_input)
-
     # 1. Choose a single site of the lattice for starting to build the cluster, in a random way.
     x = np.random.randint(0, L_input)
     y = np.random.randint(0, L_input)
@@ -138,51 +129,54 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
 
         # Left neighbor
 
-        [leftx, lefty] = spin_anterior_x[currentx, currenty]
+        leftx = (currentx-1)%L_input
+        lefty = currenty
 
-        if spin_input[leftx, lefty] * sign > 0.5 and \
-            lable[leftx, lefty] and np.random.rand() < P_add:
+        if spin_input[leftx, lefty] * sign > 0.5 and lable[leftx, lefty] and np.random.rand() < P_add:
             stack.append([leftx, lefty])
             lable[leftx, lefty] = 0
 
         # Right neighbor
 
-        [rightx, righty] = spin_posterior_x(currentx, currenty)
+        rightx = (currentx+1)%L_input
+        righty = currenty
 
-        if spin_input[rightx, righty] * sign > 0.5 and \
-                lable[rightx, righty] and np.random.rand() < P_add:
+        if spin_input[rightx, righty] * sign > 0.5 and lable[rightx, righty] and np.random.rand() < P_add:
             stack.append([rightx, righty])
             lable[rightx, righty] = 0
 
         # Up neighbor
 
-        [upx, upy] = spin_anterior_y(currentx, currenty)
+        upx = currentx
+        upy = (currenty-1)%L_input
 
-        if spin_input[upx, upy] * sign > 0.5 and \
-                lable[upx, upy] and np.random.rand() < P_add:
+        if spin_input[upx, upy] * sign > 0.5 and lable[upx, upy] and np.random.rand() < P_add:
             stack.append([upx, upy])
             lable[upx, upy] = 0
 
         # Down neighbor
 
-        [downx, downy] = spin_posterior_y(currentx, currenty)
+        downx = currentx
+        downy = (currenty+1)%L_input
 
-        if spin_input[downx, downy] * sign > 0.5 and \
-                lable[downx, downy] and np.random.rand() < P_add:
+        if spin_input[downx, downy] * sign > 0.5 and lable[downx, downy] and np.random.rand() < P_add:
             stack.append([downx, downy])
             lable[downx, downy] = 0
 
-        # Return cluster size
+    # cluster size
 
-        return self.size * self.size - sum(sum(lable))
+    cluster_size = L_input * L_input - sum(sum(lable))
+
+    # Calculating the total spin of neighbouring cells
+    spin_anterior_x = np.roll(spin_input,-1, axis=1)
+    spin_anterior_y = np.roll(spin_input,-1, axis=0)
+    spin_posterior_x = np.roll(spin_input,1, axis=1)
+    spin_posterior_y = np.roll(spin_input,1, axis=0)
+    vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
+    #Calculate the change in energy of flipping a spin
+    DeltaE = 2 * (J_input*(spin_input * vecinos) + B_input*spin_input)    
     
-
-    (spin_input, transitions, link_up, link_right) = sub_step_recursive_wolff(spin_input, transitions, link_up, link_right, t_input, L_input, i, j)
-
-    #print (transitions) 
-    spin = np.multiply(spin_input, transitions)
-
-    return (spin, DeltaE)   
+    return (spin_input, DeltaE, cluster_size)   
 
 def clicked():
     
@@ -202,11 +196,13 @@ def clicked():
     # Animation parameters
     ax = plt.subplot()
 
-    spin_in = np.ones((L,L))
+    #spin_in = np.ones((L,L))
+    spin_in = np.random.randint(0, 2, [L, L]) * 2 - 1
     print(spin_in)
     # Thermalize the system 
     for i in range (0,ntherm):
-        (spin_in, DeltaE) = step(spin_in, t, J, B, L)
+        (spin_in, DeltaE, cluster_size) = step_wolff(spin_in, t, J, B, L)
+        #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
         ax.imshow(spin_in)
@@ -284,10 +280,10 @@ def clicked_loop():
             current_M_sq = sum(sum(spin_sq))/L2 
             M_sq_acum = M_sq_acum + current_M_sq
 
-            current_E = -sum(sum(DeltaE))/(L2) # Divide by two because of double counting
+            current_E = -sum(sum(DeltaE))/(2*L2) # Divide by two because of double counting
             E_acum = E_acum + current_E
             DeltaE_sq = np.multiply(DeltaE, DeltaE)
-            current_E_sq = sum(sum((DeltaE_sq)))/(L2)
+            current_E_sq = sum(sum((DeltaE_sq)))/(4*L2)
             E_sq_acum = E_sq_acum + current_E_sq
 
         #compute thermodinamical variables
@@ -404,13 +400,13 @@ def clicked_wolff():
         E_acum = 0
         E_sq_acum =0
         ts.append(current_t)
-        spin_in = np.ones((L,L))
+        spin_in = np.ones((L,L))*-1
         #execute step`s
         for i in range (0,ntherm):
-            (spin_in, DeltaE) = step_wolff(spin_in, current_t, J, B, L)
+            (spin_in, DeltaE, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
         print("Temperature: ",current_t,"execution: ",i)
         for i in range (0,ntherm):
-            (spin_in, DeltaE) = step_wolff(spin_in, current_t, J, B, L)
+            (spin_in, DeltaE, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
 
             current_M = sum(sum(spin_in))/L2  
             M_acum = M_acum + abs(current_M)
@@ -418,10 +414,10 @@ def clicked_wolff():
             current_M_sq = sum(sum(spin_sq))/L2 
             M_sq_acum = M_sq_acum + current_M_sq
 
-            current_E = -sum(sum(DeltaE))/(L2) # Divide by two because of double counting
+            current_E = -sum(sum(DeltaE))/(2*L2) # Divide by two because of double counting
             E_acum = E_acum + current_E
             DeltaE_sq = np.multiply(DeltaE, DeltaE)
-            current_E_sq = sum(sum((DeltaE_sq)))/(L2)
+            current_E_sq = sum(sum((DeltaE_sq)))/(4*L2)
             E_sq_acum = E_sq_acum + current_E_sq
 
         #compute thermodinamical variables
@@ -550,7 +546,7 @@ btn.grid(column=0, row=6)
 btn_loop = tk.Button(window, text="Start continuous simulation", command=clicked_loop)
 btn_loop.grid(column=1, row=6)
 
-btn_wolff = tk.Button(window, text="Continuous simulation with renorm", command=clicked_wolff)
+btn_wolff = tk.Button(window, text="Continuous simulation with wolff algorithm", command=clicked_wolff)
 btn_wolff.grid(column=2, row=6)
 
 window.mainloop()
