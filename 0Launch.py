@@ -77,6 +77,35 @@ def step(spin_input, t_input, J_input, B_input, L_input):
 
     return (spin, DeltaE)
 
+def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
+    tryin_spin = np.random.randint(0, q, [L_input, L_input])
+    # Calculating the total spin of neighbouring cells
+    spin_anterior_x = np.roll(spin_input,-1, axis=1)
+    spin_anterior_y = np.roll(spin_input,-1, axis=0)
+    spin_posterior_x = np.roll(spin_input,1, axis=1)
+    spin_posterior_y = np.roll(spin_input,1, axis=0)
+
+    #E = -J*SUM(s(i,j)*(s(i-1,j)+s(i+1,j)+s(i, j-1)+s(i,j+1))) -H SUM(s(i,j))
+    # definiendo vecinos(i,j) = (s(i-1,j)+s(i+1,j)+s(i, j-1)+s(i,j+1))
+    #E = -J*SUM(s(i,j)*vecinos(i,j)) -H SUM(s(i,j))
+    #vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
+    #Calculate the change in energy of flipping a spin
+    DeltaE = -J_input*((tryin_spin == spin_anterior_x).astype(int) +(tryin_spin == spin_anterior_y).astype(int) + (tryin_spin == spin_posterior_x).astype(int) + (tryin_spin == spin_posterior_y).astype(int) - \
+                (spin_input == spin_anterior_x).astype(int) -(spin_input == spin_anterior_y).astype(int) - (spin_input == spin_posterior_x).astype(int) - (spin_input == spin_posterior_y).astype(int))  + \
+        + B_input*spin_input
+    #calculate the transition probabilities
+    p_trans = np.exp(-DeltaE/t_input)
+    # Decide wich transition will occur
+    transitions = ((np.random.rand(L_input, L_input) < p_trans) & np.random.randint(0, 2, [L_input, L_input]))
+    no_transitions = (transitions*-1)+1
+    #print (transitions) 
+    spin1 = np.multiply(tryin_spin, transitions)
+    spin2 = np.multiply(spin_input, no_transitions)
+
+    spin = spin1+spin2
+
+    return (spin, DeltaE)
+
 def sub_step_recursive_wolff(spin_input, transitions, link_up, link_right, t_input, L_input, i, j):
     index_j = (j+1)%L_input
     if (spin_input[i,j] == spin_input[i,index_j]) & (link_up[i,j] == 0):
@@ -473,6 +502,39 @@ def clicked_wolff():
     #plt.plot(ts,kappa_theoretical)
 
     plt.show()
+
+def clicked_potts():
+    
+    L = int(txt_length.get())
+    t = float(txt_temperature.get())
+    ntherm = int(txt_steps_thermal.get())
+    t_max = float(txt_temperature_max.get())
+    t_steps = float(txt_steps_t.get())
+    L2 = L*L
+    J= float(txt_J.get())
+    B=0
+    q=int(txt_size_potts.get())
+
+    print ("2D Potts model with the Wolff algorithm.\n")
+    print("\n====    ", L, " x ", L, "     T = ", t,"    ====\n")
+    print("\nntherm  nblock   nsamp   seed\n")
+    print(ntherm, nblock, nsamp, seed)
+   
+    # Animation parameters
+    ax = plt.subplot()
+
+    #spin_in = np.ones((L,L))
+    spin_in = np.random.randint(0, q, [L, L])
+    print(spin_in)
+    # Thermalize the system 
+    for i in range (0,ntherm):
+        (spin_in, DeltaE) = step_potts(spin_in, t, J, B, L, q)
+        #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
+
+        ax.cla()
+        ax.imshow(spin_in)
+        plt.pause(0.0001)    
+
     
 
 print("Starting simulation")
@@ -534,19 +596,22 @@ C1 = tk.Checkbutton(window, text = "Init conditions ones", variable = cb_init_co
                  onvalue = 1, offvalue = 0)
 C1.grid(column=0, row =4)
 
-lbl_size_renorm = tk.Label(window, text="Renormalization length")
-lbl_size_renorm.grid(column=0, row=5) 
-txt_size_renorm = tk.Entry(window,width=10)
-txt_size_renorm.grid(column=1, row=5)   
-txt_size_renorm.insert(0, 2)  
+lbl_size_potts = tk.Label(window, text="q potts model")
+lbl_size_potts.grid(column=1, row=4) 
+txt_size_potts = tk.Entry(window,width=10)
+txt_size_potts.grid(column=1, row=5)   
+txt_size_potts.insert(0, 2)  
 
-btn = tk.Button(window, text="Start Simulation only minimum temperature", command=clicked)
-btn.grid(column=0, row=6)
+btn = tk.Button(window, text="Ising Simulation only minimum temperature", command=clicked)
+btn.grid(column=0, row=7)
 
 btn_loop = tk.Button(window, text="Start continuous simulation", command=clicked_loop)
-btn_loop.grid(column=1, row=6)
+btn_loop.grid(column=1, row=7)
 
 btn_wolff = tk.Button(window, text="Continuous simulation with wolff algorithm", command=clicked_wolff)
-btn_wolff.grid(column=2, row=6)
+btn_wolff.grid(column=2, row=7)
+
+btn_potts = tk.Button(window, text="Potts simulation only minimum temperature", command=clicked_potts)
+btn_potts.grid(column=0, row=8)
 
 window.mainloop()
