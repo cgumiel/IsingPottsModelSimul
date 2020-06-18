@@ -96,7 +96,7 @@ def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
     #calculate the transition probabilities
     p_trans = np.exp(-DeltaE/t_input)
     # Decide wich transition will occur
-    transitions = ((np.random.rand(L_input, L_input) < p_trans) & np.random.randint(0, 2, [L_input, L_input]))
+    transitions = ((np.random.rand(L_input, L_input) <= p_trans) & np.random.randint(0, 2, [L_input, L_input]))
     no_transitions = (transitions*-1)+1
     #print (transitions) 
     spin1 = np.multiply(tryin_spin, transitions)
@@ -215,6 +215,8 @@ def clicked():
     J= float(txt_J.get())
     B=0
 
+    
+
     print ("2D Ising model with the Metropolis algorithm.\n")
     print("\n====    ", L, " x ", L, "     T = ", t,"    ====\n")
     print("\nntherm  nblock   nsamp   seed\n")
@@ -230,7 +232,10 @@ def clicked():
     print(spin_in)
     # Thermalize the system 
     for i in range (0,ntherm):
-        (spin_in, DeltaE, cluster_size) = step_wolff(spin_in, t, J, B, L)
+        if cb_montecarlo_condition.get():
+            (spin_in, DeltaE) = step(spin_in, t, J, B, L)
+        else:
+            (spin_in, DeltaE, cluster_size) = step_wolff(spin_in, t, J, B, L)
         #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
@@ -528,7 +533,10 @@ def clicked_potts():
     print(spin_in)
     # Thermalize the system 
     for i in range (0,ntherm):
-        (spin_in, DeltaE) = step_potts(spin_in, t, J, B, L, q)
+        if cb_montecarlo_condition.get():
+            (spin_in, DeltaE) = step(spin_in, t, J, B, L)
+        else:
+            (spin_in, DeltaE) = step_potts(spin_in, t, J, B, L, q)
         #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
@@ -591,8 +599,8 @@ txt_steps_t = tk.Entry(window,width=10)
 txt_steps_t.grid(column=2, row=3)    
 txt_steps_t.insert(0, 0.01)    
 
-cb_init_condition = tk.IntVar()
-C1 = tk.Checkbutton(window, text = "Init conditions ones", variable = cb_init_condition, \
+cb_montecarlo_condition = tk.IntVar()
+C1 = tk.Checkbutton(window, text = "Montecarlo", variable = cb_montecarlo_condition, \
                  onvalue = 1, offvalue = 0)
 C1.grid(column=0, row =4)
 
