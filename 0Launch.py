@@ -90,13 +90,15 @@ def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
     #E = -J*SUM(s(i,j)*vecinos(i,j)) -H SUM(s(i,j))
     #vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
     #Calculate the change in energy of flipping a spin
-    DeltaE = -J_input*((tryin_spin == spin_anterior_x).astype(int) +(tryin_spin == spin_anterior_y).astype(int) + (tryin_spin == spin_posterior_x).astype(int) + (tryin_spin == spin_posterior_y).astype(int) - \
-                (spin_input == spin_anterior_x).astype(int) -(spin_input == spin_anterior_y).astype(int) - (spin_input == spin_posterior_x).astype(int) - (spin_input == spin_posterior_y).astype(int))  + \
-        + B_input*spin_input
+    E2 = -J_input*((tryin_spin == spin_anterior_x).astype(int) +(tryin_spin == spin_anterior_y).astype(int) + \
+        (tryin_spin == spin_posterior_x).astype(int) + (tryin_spin == spin_posterior_y).astype(int))
+    E1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
+        (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))
+    DeltaE = E2 -E1 + B_input*spin_input
     #calculate the transition probabilities
     p_trans = np.exp(-DeltaE/t_input)
     # Decide wich transition will occur
-    transitions = ((np.random.rand(L_input, L_input) <= p_trans) & np.random.randint(0, 2, [L_input, L_input]))
+    transitions = (np.random.rand(L_input, L_input) < p_trans) #& np.random.randint(0, 2, [L_input, L_input]))
     no_transitions = (transitions*-1)+1
     #print (transitions) 
     spin1 = np.multiply(tryin_spin, transitions)
@@ -104,33 +106,7 @@ def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
     spin = spin1+spin2
 
-    return (spin, DeltaE)
-
-def sub_step_recursive_wolff(spin_input, transitions, link_up, link_right, t_input, L_input, i, j):
-    index_j = (j+1)%L_input
-    if (spin_input[i,j] == spin_input[i,index_j]) & (link_up[i,j] == 0):
-        transitions[i,index_j] = (random.random() < 1-math.exp(-2/t_input*spin_input[i,j]*spin_input[i,index_j]))*-2 + 1
-        link_up[i,j] = 1
-        (spin_input, transitions, link_up, link_right) = sub_step_recursive_wolff(spin_input, transitions, link_up, link_right, t_input, L_input, i, index_j)
-    index_j = (j-1)%L_input
-    if (spin_input[i,j] == spin_input[i,index_j]) & (link_up[i,j-1] == 0):
-        transitions[i,index_j] = (random.random() < 1-math.exp(-2/t_input*spin_input[i,j]*spin_input[i,index_j]))*-2 + 1
-        link_up[i,index_j] = 1
-        (spin_input, transitions, link_up, link_right) = sub_step_recursive_wolff(spin_input, transitions, link_up, link_right, t_input, L_input, i, index_j)
-
-    index_i =(i+1)%L_input
-    if (spin_input[i,j] == spin_input[index_i,j]) & (link_right[i,j] == 0):
-        transitions[index_i,j] = (random.random()< 1-math.exp(-2/t_input*spin_input[i,j]*spin_input[index_i,j]))*-2 + 1
-        link_right[i,j] = 1
-        (spin_input, transitions, link_up, link_right) = sub_step_recursive_wolff(spin_input, transitions, link_up, link_right, t_input, L_input, index_i, j)
-
-    index_i =(i-1)%L_input 
-    if(spin_input[i,j] == spin_input[index_i,j]) & (link_right[i-1,j] == 0):
-        transitions[index_i,j] = (random.random() < 1-math.exp(-2/t_input*spin_input[i,j]*spin_input[index_i,j]))*-2 + 1
-        link_right[index_i,j] = 1
-        (spin_input, transitions, link_up, link_right) = sub_step_recursive_wolff(spin_input, transitions, link_up, link_right, t_input, L_input, index_i, j)
-
-    return (spin_input, transitions, link_up, link_right)
+    return (spin, E1)
 
 def step_wolff(spin_input, t_input, J_input, B_input, L_input):
 
@@ -139,7 +115,7 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
     y = np.random.randint(0, L_input)
 
     sign = spin_input[x, y]
-    P_add = 1 - np.exp(-2 * J_input / t_input)
+    P_add = 1 - math.exp(-2 * J_input / t_input)
     stack = [[x, y]]
     lable = np.ones([L_input, L_input], int)
     lable[x, y] = 0
@@ -161,7 +137,7 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
         leftx = (currentx-1)%L_input
         lefty = currenty
 
-        if spin_input[leftx, lefty] * sign > 0.5 and lable[leftx, lefty] and np.random.rand() < P_add:
+        if (spin_input[leftx, lefty] * sign > 0.5) and (lable[leftx, lefty]) and (np.random.rand() < P_add):
             stack.append([leftx, lefty])
             lable[leftx, lefty] = 0
 
@@ -170,7 +146,7 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
         rightx = (currentx+1)%L_input
         righty = currenty
 
-        if spin_input[rightx, righty] * sign > 0.5 and lable[rightx, righty] and np.random.rand() < P_add:
+        if (spin_input[rightx, righty] * sign > 0.5) and (lable[rightx, righty]) and (np.random.rand() < P_add):
             stack.append([rightx, righty])
             lable[rightx, righty] = 0
 
@@ -179,7 +155,7 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
         upx = currentx
         upy = (currenty-1)%L_input
 
-        if spin_input[upx, upy] * sign > 0.5 and lable[upx, upy] and np.random.rand() < P_add:
+        if (spin_input[upx, upy] * sign > 0.5) and (lable[upx, upy]) and (np.random.rand() < P_add):
             stack.append([upx, upy])
             lable[upx, upy] = 0
 
@@ -188,7 +164,7 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
         downx = currentx
         downy = (currenty+1)%L_input
 
-        if spin_input[downx, downy] * sign > 0.5 and lable[downx, downy] and np.random.rand() < P_add:
+        if (spin_input[downx, downy] * sign > 0.5) and (lable[downx, downy]) and (np.random.rand() < P_add):
             stack.append([downx, downy])
             lable[downx, downy] = 0
 
@@ -207,17 +183,101 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
     
     return (spin_input, DeltaE, cluster_size)   
 
-def clicked():
+def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
+
+    # 1. Choose a single site of the lattice for starting to build the cluster, in a random way.
+    x = np.random.randint(0, L_input)
+    y = np.random.randint(0, L_input)
+
+    sign = spin_input[x, y]
+    new_spin = random.randint(0, q-1)
+    while new_spin == sign:
+        new_spin = random.randint(0, q-1)
+    P_add = 1 - math.exp(-2 * J_input / t_input)
+    stack = [[x, y]]
+    lable = np.ones([L_input, L_input], int)
+    lable[x, y] = 0
+
+    # 2. Consider all the links connected to that initial site; the $\ell_{-}$ links are never to be activated; 
+    #    activate the $\ell_{+}$ links with the probability $p_{+}=1-\exp(-2\beta\psi_{-}\psi_{+})$, thus forming a first cluster of sites, 
+    #    that is, updating the cluster from a single site to possibly a few sites.
+    while len(stack) > 0.5:
+
+        # While stack is not empty, pop and flip a spin
+
+        [currentx, currenty] = stack.pop()
+        spin_input[currentx, currenty] = new_spin
+
+        # Append neighbor spins
+
+        # Left neighbor
+
+        leftx = (currentx-1)%L_input
+        lefty = currenty
+
+        if (spin_input[leftx, lefty] == sign) and lable[leftx, lefty] and np.random.rand() < P_add:
+            stack.append([leftx, lefty])
+            lable[leftx, lefty] = 0
+
+        # Right neighbor
+
+        rightx = (currentx+1)%L_input
+        righty = currenty
+
+        if (spin_input[rightx, righty] == sign) and lable[rightx, righty] and np.random.rand() < P_add:
+            stack.append([rightx, righty])
+            lable[rightx, righty] = 0
+
+        # Up neighbor
+
+        upx = currentx
+        upy = (currenty-1)%L_input
+
+        if (spin_input[upx, upy] == sign) and lable[upx, upy] and np.random.rand() < P_add:
+            stack.append([upx, upy])
+            lable[upx, upy] = 0
+
+        # Down neighbor
+
+        downx = currentx
+        downy = (currenty+1)%L_input
+
+        if (spin_input[downx, downy] == sign) and lable[downx, downy] and np.random.rand() < P_add:
+            stack.append([downx, downy])
+            lable[downx, downy] = 0
+
+    # cluster size
+
+    cluster_size = L_input * L_input - sum(sum(lable))
+
+    # Calculating the total spin of neighbouring cells
+    spin_anterior_x = np.roll(spin_input,-1, axis=1)
+    spin_anterior_y = np.roll(spin_input,-1, axis=0)
+    spin_posterior_x = np.roll(spin_input,1, axis=1)
+    spin_posterior_y = np.roll(spin_input,1, axis=0)
+    vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
+    #Calculate the change in energy of flipping a spin
+    E1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
+        (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))  
     
+    return (spin_input, E1, cluster_size)       
+
+def initialise():
     L = int(txt_length.get())
     t = float(txt_temperature.get())
     ntherm = int(txt_steps_thermal.get())
     J= float(txt_J.get())
     B=0
+    t_max = float(txt_temperature_max.get())
+    t_steps = float(txt_steps_t.get())
+    L2 = L*L
 
-    
+    return (L, t, t_max, t_steps, L2, ntherm, J, B)
 
-    print ("2D Ising model with the Metropolis algorithm.\n")
+def clicked():
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
+
+    print ("2D Ising model with the Metropolis matrix algorithm.\n")
     print("\n====    ", L, " x ", L, "     T = ", t,"    ====\n")
     print("\nntherm  nblock   nsamp   seed\n")
     print(ntherm, nblock, nsamp, seed)
@@ -244,23 +304,16 @@ def clicked():
 
 def clicked_loop():
     
-    L = int(txt_length.get())
-    t = float(txt_temperature.get())
-    ntherm = int(txt_steps_thermal.get())
-    t_max = float(txt_temperature_max.get())
-    t_steps = float(txt_steps_t.get())
-    L2 = L*L
-    J= float(txt_J.get())
-    B=0
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
 
-    print ("2D Ising model with the Metropolis algorithm.\n")
+    print ("2D Ising model with the Matrix Metropolis algorithm.\n")
     print("\n====    ", L, " x ", L, "     T = ", t,"    ====\n")
     print("\nntherm  nblock   nsamp   seed\n")
     print(ntherm, nblock, nsamp, seed)
    
     print("\n energy      cv        magn     \n")
 
-    # Animation paramet, ers
+    # Animation parameters
     fig, ax = plt.subplots()
     spin_in = np.random.randint(0, 2, [L, L]) * 2 - 1
     print(spin_in)
@@ -378,14 +431,7 @@ def clicked_loop():
 
 def clicked_wolff():
     
-    L = int(txt_length.get())
-    t = float(txt_temperature.get())
-    ntherm = int(txt_steps_thermal.get())
-    t_max = float(txt_temperature_max.get())
-    t_steps = float(txt_steps_t.get())
-    L2 = L*L
-    J= float(txt_J.get())
-    B=0
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
 
     print ("2D Ising model with the Wolff algorithm.\n")
     print("\n====    ", L, " x ", L, "     T = ", t,"    ====\n")
@@ -510,14 +556,7 @@ def clicked_wolff():
 
 def clicked_potts():
     
-    L = int(txt_length.get())
-    t = float(txt_temperature.get())
-    ntherm = int(txt_steps_thermal.get())
-    t_max = float(txt_temperature_max.get())
-    t_steps = float(txt_steps_t.get())
-    L2 = L*L
-    J= float(txt_J.get())
-    B=0
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
     q=int(txt_size_potts.get())
 
     print ("2D Potts model with the Wolff algorithm.\n")
@@ -534,15 +573,148 @@ def clicked_potts():
     # Thermalize the system 
     for i in range (0,ntherm):
         if cb_montecarlo_condition.get():
-            (spin_in, DeltaE) = step(spin_in, t, J, B, L)
-        else:
             (spin_in, DeltaE) = step_potts(spin_in, t, J, B, L, q)
+        else:
+            (spin_in, DeltaE, cluster_size) = step_wolff_potts(spin_in, t, J, B, L, q)
         #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
         ax.imshow(spin_in)
         plt.pause(0.0001)    
 
+def clicked_loop_potts():
+    
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
+    q=int(txt_size_potts.get())
+
+    print ("2D Potts model with the Metropolis algorithm, seferal temperatures.\n")
+    print("\n====    ", L, " x ", L, "     T = ", t,"    ====\n")
+    print("\nntherm  nblock   nsamp   seed\n")
+    print(ntherm, nblock, nsamp, seed)
+   
+    print("\n energy      cv        magn     \n")
+
+    # Animation paramet, ers
+    fig, ax = plt.subplots()
+    spin_in = np.random.randint(0, q, [L, L])
+    print(spin_in)
+    # Thermalize the system 
+    M = []
+    M_square_mean = []
+    E = []
+    E_square_mean = []  #E^2
+    C = []  #Specific Heat
+    ts = []
+    kappa = []
+    m_theoretical = []
+    c_theoretical = []
+    kappa_theoretical = []
+    minimum_t_step = int((t/t_steps))
+    maximum_t_step = int((t_max/t_steps))
+    t_critical_theo = 2.26919
+    c_plus = 0.96258
+    c_minus = 0.02554
+    for t_index in range (minimum_t_step,maximum_t_step):
+        current_t = t_index*t_steps
+        if current_t < t_critical_theo:
+            current_m_theo = math.pow(1-math.pow(math.sinh(2/current_t),-4),(1/8))
+            #current_kappa_theo = 1/t_critical_theo*c_minus*math.pow((t_critical_theo-current_t)/t_critical_theo,-1*(7/4))
+            #kappa_theoretical.append(current_kappa_theo)
+        else:
+            current_m_theo = 0
+            #current_kappa_theo = 1/t_critical_theo*c_plus*math.pow((current_t - t_critical_theo)/t_critical_theo,-1*(7/4))
+            #kappa_theoretical.append(current_kappa_theo)
+        current_c_theo = -0.4945*math.log(abs((t_critical_theo-current_t)/t_critical_theo))
+
+        m_theoretical.append(current_m_theo)
+        c_theoretical.append(current_c_theo)
+        
+        M_acum = 0
+        M_sq_acum = 0
+        E_acum = 0
+        E_sq_acum =0
+        ts.append(current_t)
+        spin_in = np.random.randint(0, q, [L, L])
+        #execute step`s
+        for i in range (0,ntherm):
+            if cb_montecarlo_condition.get():
+                (spin_in, E_sample) = step_potts(spin_in, current_t, J, B, L, q)
+            else:
+                (spin_in, E_sample, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
+        print("Temperature: ",current_t,"execution: ",i)
+        for i in range (0,ntherm):
+            if cb_montecarlo_condition.get():
+                (spin_in, E_sample) = step_potts(spin_in, current_t, J, B, L, q)
+            else:
+                (spin_in, E_sample, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
+
+            current_M = (spin_in == 0).sum()/L2
+            M_acum = M_acum + abs(current_M)
+            spin_sq = np.multiply(spin_in, spin_in)
+            current_M_sq = sum(sum(spin_sq))/L2 
+            M_sq_acum = M_sq_acum + current_M_sq
+
+            current_E = sum(sum(E_sample))/(L2) # Divide by two because of double counting
+            E_acum = E_acum + current_E
+            DeltaE_sq = np.multiply(E_sample, E_sample)
+            current_E_sq = sum(sum((DeltaE_sq)))/(L2)
+            E_sq_acum = E_sq_acum + current_E_sq
+
+            #current_m0 = np.exp(-DeltaE/t_input)
+
+        #compute thermodinamical variables
+        #magnetizaton
+        M.append(current_M)
+        #Kappa, magnetic subceptibility
+        current_M_mean = M_acum/ntherm
+        current_M_sq_mean = M_sq_acum/ntherm
+        M_square_mean.append(current_M_sq_mean)
+        kappa.append(1/(current_t)*(current_M_sq_mean-(current_M_mean*current_M_mean)))
+        
+        #E= -1/2DeltaE
+        E.append(current_E) 
+        #specific heat
+        current_E_mean = E_acum/ntherm
+        current_E_sq_mean = E_sq_acum/ntherm
+        E_square_mean.append(current_E_sq_mean) 
+        C.append(1/((current_t*current_t))*(current_E_sq_mean-(current_E_mean*current_E_mean)))
+ 
+    df = pd.DataFrame()
+    df.insert(0,'ts',ts)
+    df.insert(1,'m',M)
+    df.insert(2,'m_theoretical',m_theoretical)
+    df.insert(3,'E',E)
+    df.insert(4,'C',C)
+    df.insert(5,'c_theoretical',c_theoretical)
+    df.insert(6,'kappa',kappa)
+    df.insert(7,'E_square',E_square_mean)
+    df.insert(8,'M_square',M_square_mean)
+    df.to_csv('ising.csv')
+
+    # ejecuta el clasificador
+    #clf = sk.pot .LinearRegression()
+    #clf.fit(X, Y)
+
+    plt.subplot(2,2,1)
+    plt.title('m=f(t)') 
+    plt.plot(ts,M)
+    #plt.plot(ts,m_theoretical)
+
+    plt.subplot(2,2,2) 
+    plt.title('e = f(t)') 
+    plt.plot(ts,E)
+
+    plt.subplot(2,2,3) 
+    plt.title('C_v = f(t)') 
+    plt.plot(ts,C)    
+    #plt.plot(ts,c_theoretical)
+
+    plt.subplot(2,2,4) 
+    plt.title('Magnetization = f(t)') 
+    plt.plot(ts,kappa)  
+    #plt.plot(ts,kappa_theoretical)
+
+    plt.show()
     
 
 print("Starting simulation")
@@ -621,5 +793,8 @@ btn_wolff.grid(column=2, row=7)
 
 btn_potts = tk.Button(window, text="Potts simulation only minimum temperature", command=clicked_potts)
 btn_potts.grid(column=0, row=8)
+
+btn_potts_loop = tk.Button(window, text="Start Potss continuous simulation", command=clicked_loop_potts)
+btn_potts_loop.grid(column=1, row=8)
 
 window.mainloop()
