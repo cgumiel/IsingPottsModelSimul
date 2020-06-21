@@ -67,7 +67,9 @@ def step(spin_input, t_input, J_input, B_input, L_input):
     #E = -J*SUM(s(i,j)*vecinos(i,j)) -H SUM(s(i,j))
     vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
     #Calculate the change in energy of flipping a spin
-    DeltaE = 2 * (J_input*(np.multiply(spin_input, vecinos)) + B_input*spin_input)
+    E_spin_J = -J_input*(np.multiply(spin_input, vecinos))
+    E_spin_B = B_input*spin_input
+    DeltaE = -2 * (E_spin_J) + E_spin_B
     #calculate the transition probabilities
     p_trans = np.exp(-DeltaE/t_input)
     # Decide wich transition will occur
@@ -75,30 +77,29 @@ def step(spin_input, t_input, J_input, B_input, L_input):
     #print (transitions) 
     spin = np.multiply(spin_input, transitions)
 
-    return (spin, DeltaE)
+    return (spin, E_spin_J+E_spin_B)
 
 def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
-    tryin_spin = np.random.randint(0, q, [L_input, L_input])
+    #try a spin with one less value of q
+    tryin_spin_first = np.random.randint(0, q-1, [L_input, L_input])
+    tryin_spin = np.mod(spin_input + tryin_spin_first+1,q)
     # Calculating the total spin of neighbouring cells
     spin_anterior_x = np.roll(spin_input,-1, axis=1)
     spin_anterior_y = np.roll(spin_input,-1, axis=0)
     spin_posterior_x = np.roll(spin_input,1, axis=1)
     spin_posterior_y = np.roll(spin_input,1, axis=0)
 
-    #E = -J*SUM(s(i,j)*(s(i-1,j)+s(i+1,j)+s(i, j-1)+s(i,j+1))) -H SUM(s(i,j))
-    # definiendo vecinos(i,j) = (s(i-1,j)+s(i+1,j)+s(i, j-1)+s(i,j+1))
-    #E = -J*SUM(s(i,j)*vecinos(i,j)) -H SUM(s(i,j))
-    #vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
     #Calculate the change in energy of flipping a spin
-    E2 = -J_input*((tryin_spin == spin_anterior_x).astype(int) +(tryin_spin == spin_anterior_y).astype(int) + \
+    E_spin_J2 = -J_input*((tryin_spin == spin_anterior_x).astype(int) +(tryin_spin == spin_anterior_y).astype(int) + \
         (tryin_spin == spin_posterior_x).astype(int) + (tryin_spin == spin_posterior_y).astype(int))
-    E1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
+    E_spin_J1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
         (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))
-    DeltaE = E2 -E1 + B_input*spin_input
+    E_spin_B = B_input*spin_input
+    DeltaE = E_spin_J2 -E_spin_J1 + E_spin_B
     #calculate the transition probabilities
     p_trans = np.exp(-DeltaE/t_input)
     # Decide wich transition will occur
-    transitions = (np.random.rand(L_input, L_input) < p_trans) #& np.random.randint(0, 2, [L_input, L_input]))
+    transitions = ((np.random.rand(L_input, L_input) < p_trans) & np.random.randint(0, 2, [L_input, L_input]))
     no_transitions = (transitions*-1)+1
     #print (transitions) 
     spin1 = np.multiply(tryin_spin, transitions)
@@ -106,7 +107,7 @@ def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
     spin = spin1+spin2
 
-    return (spin, E1)
+    return (spin, E_spin_J1 + E_spin_B)
 
 def step_wolff(spin_input, t_input, J_input, B_input, L_input):
 
@@ -179,9 +180,10 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
     spin_posterior_y = np.roll(spin_input,1, axis=0)
     vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
     #Calculate the change in energy of flipping a spin
-    DeltaE = 2 * (J_input*(spin_input * vecinos) + B_input*spin_input)    
+    E_spin_J = -J_input*(np.multiply(spin_input, vecinos))
+    E_spin_B = B_input*spin_input
     
-    return (spin_input, DeltaE, cluster_size)   
+    return (spin_input, E_spin_J + E_spin_B, cluster_size)   
 
 def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
@@ -256,10 +258,11 @@ def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
     spin_posterior_x = np.roll(spin_input,1, axis=1)
     spin_posterior_y = np.roll(spin_input,1, axis=0)
     #Calculate the change in energy of flipping a spin
-    E1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
-        (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))  
+    E_spin_J1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
+        (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))
+    E_spin_B = B_input*spin_input
     
-    return (spin_input, E1, cluster_size)       
+    return (spin_input, E_spin_J1 + E_spin_B, cluster_size)       
 
 def initialise():
     L = int(txt_length.get())
@@ -272,6 +275,65 @@ def initialise():
     L2 = L*L
 
     return (L, t, t_max, t_steps, L2, ntherm, J, B)
+
+def compute_theoretical_values_ising(minimum_t_step, maximum_t_step, t_steps):
+
+    m_theoretical = []
+    c_theoretical = []
+    kappa_theoretical = []
+    t_critical_theo = 2.26919
+    c_plus = 0.96258
+    c_minus = 0.02554
+
+    for t_index in range (minimum_t_step,maximum_t_step):
+        current_t = t_index*t_steps
+        if current_t < t_critical_theo:
+            current_m_theo = math.pow(1-math.pow(math.sinh(2/current_t),-4),(1/8))
+            current_kappa_theo = 1/t_critical_theo*c_minus*math.pow((t_critical_theo-current_t)/t_critical_theo,-1*(7/4))
+        else:
+            current_m_theo = 0
+            current_kappa_theo = 1/t_critical_theo*c_plus*math.pow((current_t - t_critical_theo)/t_critical_theo,-1*(7/4))
+
+        current_c_theo = -0.4945*math.log(abs((t_critical_theo-current_t)/t_critical_theo))
+
+        m_theoretical.append(current_m_theo)
+        c_theoretical.append(current_c_theo)
+        kappa_theoretical.append(current_kappa_theo)
+        
+        
+    return (m_theoretical, c_theoretical, kappa_theoretical)
+
+def compute_theoretical_values_potts(J_input, q, minimum_t_step, maximum_t_step, t_steps):
+
+    m_theoretical = []
+    c_theoretical = []
+    kappa_theoretical = []
+    t_critical_theo = 2.26919
+    c_plus = 0.96258
+    c_minus = 0.02554
+    t_critical_theo_potts = J_input*(math.log(1+math.sqrt(q)))**(-1)
+    print (t_critical_theo_potts)    
+
+    for t_index in range (minimum_t_step,maximum_t_step):
+        current_t = t_index*t_steps
+        if current_t < t_critical_theo:
+            current_m_theo = math.pow(1-math.pow(math.sinh(2/current_t),-4),(1/8))
+            current_kappa_theo = 1/t_critical_theo*c_minus*math.pow((t_critical_theo-current_t)/t_critical_theo,-1*(7/4))
+        else:
+            current_m_theo = 0
+            current_kappa_theo = 1/t_critical_theo*c_plus*math.pow((current_t - t_critical_theo)/t_critical_theo,-1*(7/4))
+
+        current_c_theo = -0.4945*math.log(abs((t_critical_theo-current_t)/t_critical_theo))
+
+
+
+        m_theoretical.append(current_m_theo)
+        c_theoretical.append(current_c_theo)
+        kappa_theoretical.append(current_kappa_theo)
+        
+        
+    return (m_theoretical, c_theoretical, kappa_theoretical)
+
 
 def clicked():
     (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
@@ -292,9 +354,9 @@ def clicked():
     # Thermalize the system 
     for i in range (0,ntherm):
         if cb_montecarlo_condition.get():
-            (spin_in, DeltaE) = step(spin_in, t, J, B, L)
+            (spin_in, E_spin) = step(spin_in, t, J, B, L)
         else:
-            (spin_in, DeltaE, cluster_size) = step_wolff(spin_in, t, J, B, L)
+            (spin_in, E_spin, cluster_size) = step_wolff(spin_in, t, J, B, L)
         #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
@@ -324,28 +386,11 @@ def clicked_loop():
     C = []  #Specific Heat
     ts = []
     kappa = []
-    m_theoretical = []
-    c_theoretical = []
-    kappa_theoretical = []
     minimum_t_step = int((t/t_steps))
     maximum_t_step = int((t_max/t_steps))
-    t_critical_theo = 2.26919
-    c_plus = 0.96258
-    c_minus = 0.02554
+    
     for t_index in range (minimum_t_step,maximum_t_step):
         current_t = t_index*t_steps
-        if current_t < t_critical_theo:
-            current_m_theo = math.pow(1-math.pow(math.sinh(2/current_t),-4),(1/8))
-            #current_kappa_theo = 1/t_critical_theo*c_minus*math.pow((t_critical_theo-current_t)/t_critical_theo,-1*(7/4))
-            #kappa_theoretical.append(current_kappa_theo)
-        else:
-            current_m_theo = 0
-            #current_kappa_theo = 1/t_critical_theo*c_plus*math.pow((current_t - t_critical_theo)/t_critical_theo,-1*(7/4))
-            #kappa_theoretical.append(current_kappa_theo)
-        current_c_theo = -0.4945*math.log(abs((t_critical_theo-current_t)/t_critical_theo))
-
-        m_theoretical.append(current_m_theo)
-        c_theoretical.append(current_c_theo)
         
         M_acum = 0
         M_sq_acum = 0
@@ -357,14 +402,14 @@ def clicked_loop():
     
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in, DeltaE) = step(spin_in, current_t, J, B, L)
+                (spin_in, E_spin) = step(spin_in, current_t, J, B, L)
             else:
-                (spin_in, DeltaE, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
+                (spin_in, E_spin, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in, DeltaE) = step(spin_in, current_t, J, B, L)
+                (spin_in, E_spin) = step(spin_in, current_t, J, B, L)
             else:
-                (spin_in, DeltaE, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
+                (spin_in, E_spin, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
 
             current_M = abs(sum(sum(spin_in)))/L2  
             M_acum = M_acum + abs(current_M)
@@ -372,29 +417,31 @@ def clicked_loop():
             current_M_sq = sum(sum(spin_sq))/L2 
             M_sq_acum = M_sq_acum + current_M_sq
 
-            current_E = -sum(sum(DeltaE))/(2*L2) # Divide by two because of double counting
+            current_E = sum(sum(E_spin))/(2*L2) 
             E_acum = E_acum + current_E
-            DeltaE_sq = np.multiply(DeltaE, DeltaE)
-            current_E_sq = sum(sum((DeltaE_sq)))/(4*L2)
+            E_sq = np.multiply(E_spin, E_spin)
+            current_E_sq = sum(sum((E_sq)))/(4*L2)
             E_sq_acum = E_sq_acum + current_E_sq
         print("Temperature: ",current_t,"execution: ",i)    
         #compute thermodinamical variables
         #magnetizaton
         M.append(current_M)
         #Kappa, magnetic subceptibility
-        current_M_mean = M_acum/ntherm
-        current_M_sq_mean = M_sq_acum/ntherm
+        current_M_mean = M_acum/(ntherm+1)
+        current_M_sq_mean = M_sq_acum/(ntherm+1)
         M_square_mean.append(current_M_sq_mean)
         kappa.append(1/(current_t)*(current_M_sq_mean-(current_M_mean*current_M_mean)))
         
         #E= -1/2DeltaE
         E.append(current_E) 
         #specific heat
-        current_E_mean = E_acum/ntherm
-        current_E_sq_mean = E_sq_acum/ntherm
+        current_E_mean = E_acum/(ntherm+1)
+        current_E_sq_mean = E_sq_acum/(ntherm+1)
         E_square_mean.append(current_E_sq_mean) 
         C.append(1/((current_t*current_t))*(current_E_sq_mean-(current_E_mean*current_E_mean)))
- 
+    
+    (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_ising(minimum_t_step, maximum_t_step, t_steps)
+
     df = pd.DataFrame()
     df.insert(0,'ts',ts)
     df.insert(1,'m',M)
@@ -403,8 +450,9 @@ def clicked_loop():
     df.insert(4,'C',C)
     df.insert(5,'c_theoretical',c_theoretical)
     df.insert(6,'kappa',kappa)
-    df.insert(7,'E_square',E_square_mean)
-    df.insert(8,'M_square',M_square_mean)
+    df.insert(7,'kappa_theoretical',kappa_theoretical)
+    df.insert(8,'E_square',E_square_mean)
+    df.insert(9,'M_square',M_square_mean)
     df.to_csv('ising.csv')
 
     # ejecuta el clasificador
@@ -423,12 +471,12 @@ def clicked_loop():
     plt.subplot(2,2,3) 
     plt.title('C_v = f(t)') 
     plt.plot(ts,C)    
-    plt.plot(ts,c_theoretical)
+    plt.plot(ts,c_theoretical/(np.max(c_theoretical)))
 
     plt.subplot(2,2,4) 
     plt.title('Magnetization = f(t)') 
     plt.plot(ts,kappa)  
-    #plt.plot(ts,kappa_theoretical)
+    plt.plot(ts,kappa_theoretical)
 
     plt.show()
 
@@ -458,6 +506,7 @@ def clicked_potts():
 
         ax.cla()
         ax.imshow(spin_in)
+        ax.set_title("frame {}".format(i))
         plt.pause(0.0001)    
 
 def clicked_loop_potts():
@@ -484,28 +533,10 @@ def clicked_loop_potts():
     C = []  #Specific Heat
     ts = []
     kappa = []
-    m_theoretical = []
-    c_theoretical = []
-    kappa_theoretical = []
     minimum_t_step = int((t/t_steps))
     maximum_t_step = int((t_max/t_steps))
-    t_critical_theo = 2.26919
-    c_plus = 0.96258
-    c_minus = 0.02554
     for t_index in range (minimum_t_step,maximum_t_step):
         current_t = t_index*t_steps
-        if current_t < t_critical_theo:
-            current_m_theo = math.pow(1-math.pow(math.sinh(2/current_t),-4),(1/8))
-            #current_kappa_theo = 1/t_critical_theo*c_minus*math.pow((t_critical_theo-current_t)/t_critical_theo,-1*(7/4))
-            #kappa_theoretical.append(current_kappa_theo)
-        else:
-            current_m_theo = 0
-            #current_kappa_theo = 1/t_critical_theo*c_plus*math.pow((current_t - t_critical_theo)/t_critical_theo,-1*(7/4))
-            #kappa_theoretical.append(current_kappa_theo)
-        current_c_theo = -0.4945*math.log(abs((t_critical_theo-current_t)/t_critical_theo))
-
-        m_theoretical.append(current_m_theo)
-        c_theoretical.append(current_c_theo)
         
         M_acum = 0
         M_sq_acum = 0
@@ -526,7 +557,11 @@ def clicked_loop_potts():
             else:
                 (spin_in, E_sample, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
 
-            current_M = (spin_in == 0).sum()/L2
+            Ni = []
+            for index in range (0,q):
+                Ni.append((spin_in == index).sum())
+            
+            current_M = q* (max(Ni)/L2-1)/(q-1)
             M_acum = M_acum + abs(current_M)
             spin_sq = np.multiply(spin_in, spin_in)
             current_M_sq = sum(sum(spin_sq))/L2 
@@ -557,6 +592,8 @@ def clicked_loop_potts():
         E_square_mean.append(current_E_sq_mean) 
         C.append(1/((current_t*current_t))*(current_E_sq_mean-(current_E_mean*current_E_mean)))
  
+    (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_potts(J, q, minimum_t_step, maximum_t_step, t_steps)
+
     df = pd.DataFrame()
     df.insert(0,'ts',ts)
     df.insert(1,'m',M)
@@ -565,8 +602,9 @@ def clicked_loop_potts():
     df.insert(4,'C',C)
     df.insert(5,'c_theoretical',c_theoretical)
     df.insert(6,'kappa',kappa)
-    df.insert(7,'E_square',E_square_mean)
-    df.insert(8,'M_square',M_square_mean)
+    df.insert(7,'kappa_theoretical',kappa_theoretical)
+    df.insert(8,'E_square',E_square_mean)
+    df.insert(9,'M_square',M_square_mean)
     df.to_csv('ising.csv')
 
     # ejecuta el clasificador
