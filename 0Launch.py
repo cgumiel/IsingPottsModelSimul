@@ -76,10 +76,10 @@ def step(spin_input, t_input, J_input, B_input, L_input):
     transitions = ((np.random.rand(L_input, L_input) < p_trans) & np.random.randint(0, 2, [L_input, L_input]))*-2 +1
     #print (transitions) 
     spin = np.multiply(spin_input, transitions)
+    
+    return (spin)
 
-    return (spin, E_spin_J+E_spin_B)
-
-def compute_energy(spin, J, B, L):
+def compute_energy_ising(spin, J, B, L):
     # Calculating the total spin of neighbouring cells
     spin_anterior_x = np.roll(spin,-1, axis=1)
     spin_anterior_y = np.roll(spin,-1, axis=0)
@@ -93,15 +93,15 @@ def compute_energy(spin, J, B, L):
     E_spin = E_spin_J + E_spin_B
     
     L2 = L*L
-    E = sum(sum(E_spin))/(2*L2) #divede by 2 because of double counting
+    E = sum(sum(E_spin))/(2*L2) #divide by 2 because of double counting
 
     return (E, E_spin)
 
 def step_bad_try(spin_input, t_input, J_input, B_input, L_input):
     spin_try = np.random.randint(0, 2, [L_input, L_input])*-2 +1
     
-    (E_actual, E_spin_actual) = compute_energy(spin_input, J_input, B_input, L_input)
-    (E_try, E_spin_try) = compute_energy(spin_try, J_input, B_input, L_input)
+    (E_actual, E_spin_actual) = compute_energy_ising(spin_input, J_input, B_input, L_input)
+    (E_try, E_spin_try) = compute_energy_ising(spin_try, J_input, B_input, L_input)
 
     DeltaE = E_try - E_actual
     #calculate the transition probability
@@ -111,7 +111,6 @@ def step_bad_try(spin_input, t_input, J_input, B_input, L_input):
        return (spin_try, E_spin_try)
     else:
         return (spin_try, E_spin_actual)
-
 
 def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
     #try a spin with one less value of q
@@ -128,12 +127,12 @@ def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
         (tryin_spin == spin_posterior_x).astype(int) + (tryin_spin == spin_posterior_y).astype(int))
     E_spin_J1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
         (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))
-    E_spin_B = B_input*spin_input
-    DeltaE = E_spin_J2 -E_spin_J1 + E_spin_B
+    
+    DeltaE = E_spin_J2 -E_spin_J1 
     #calculate the transition probabilities
     p_trans = np.exp(-DeltaE/t_input)
     # Decide wich transition will occur
-    transitions = ((np.random.rand(L_input, L_input) < p_trans) )
+    transitions = ((np.random.rand(L_input, L_input) < p_trans) & np.random.randint(0, 2, [L_input, L_input]))
     no_transitions = (transitions*-1)+1
     #print (transitions) 
     spin1 = np.multiply(tryin_spin, transitions)
@@ -141,7 +140,17 @@ def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
     spin = spin1+spin2
 
-    return (spin, E_spin_J1 + E_spin_B)
+    spin_anterior_x = np.roll(spin,-1, axis=1)
+    spin_anterior_y = np.roll(spin,-1, axis=0)
+    spin_posterior_x = np.roll(spin,1, axis=1)
+    spin_posterior_y = np.roll(spin,1, axis=0)
+
+    #Calculate the change in energy of flipping a spin
+    E_spin = -J_input*((spin == spin_anterior_x).astype(int) +(spin == spin_anterior_y).astype(int) + \
+        (spin == spin_posterior_x).astype(int) + (spin == spin_posterior_y).astype(int))   
+    E_spin_B = -B_input*spin
+
+    return (spin, E_spin + E_spin_B)
 
 def step_wolff(spin_input, t_input, J_input, B_input, L_input):
 
@@ -207,17 +216,8 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
 
     cluster_size = L_input * L_input - sum(sum(lable))
 
-    # Calculating the total spin of neighbouring cells
-    spin_anterior_x = np.roll(spin_input,-1, axis=1)
-    spin_anterior_y = np.roll(spin_input,-1, axis=0)
-    spin_posterior_x = np.roll(spin_input,1, axis=1)
-    spin_posterior_y = np.roll(spin_input,1, axis=0)
-    vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
-    #Calculate the change in energy of flipping a spin
-    E_spin_J = -J_input*(np.multiply(spin_input, vecinos))
-    E_spin_B = B_input*spin_input
-    
-    return (spin_input, E_spin_J + E_spin_B, cluster_size)   
+  
+    return (spin_input, cluster_size)   
 
 def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
@@ -226,9 +226,10 @@ def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
     y = np.random.randint(0, L_input)
 
     sign = spin_input[x, y]
-    new_spin = random.randint(0, q-1)
-    while new_spin == sign:
-        new_spin = random.randint(0, q-1)
+
+    new_spin = random.randint(0, q-2)
+    tryin_spin = np.mod(spin_input + new_spin+1,q)
+    
     P_add = 1 - np.exp(-2 * J_input / t_input)
     stack = [[x, y]]
     lable = np.ones([L_input, L_input], int)
@@ -242,7 +243,7 @@ def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
         # While stack is not empty, pop and flip a spin
 
         [currentx, currenty] = stack.pop()
-        spin_input[currentx, currenty] = new_spin
+        spin_input[currentx, currenty] = tryin_spin
 
         # Append neighbor spins
 
@@ -310,7 +311,7 @@ def initialise():
 
     return (L, t, t_max, t_steps, L2, ntherm, J, B)
 
-def compute_theoretical_values_ising(minimum_t_step, maximum_t_step, t_steps):
+def compute_theoretical_values_ising(J_input, minimum_t_step, maximum_t_step, t_steps):
 
     m_theoretical = []
     c_theoretical = []
@@ -368,7 +369,6 @@ def compute_theoretical_values_potts(J_input, q, minimum_t_step, maximum_t_step,
         
     return (m_theoretical, c_theoretical, kappa_theoretical)
 
-
 def clicked():
     (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
 
@@ -394,6 +394,7 @@ def clicked():
         #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
+        ax.set_title("frame {}".format(i))
         ax.imshow(spin_in)
         plt.pause(0.0001)    
 
@@ -407,9 +408,8 @@ def clicked_loop():
     print(ntherm, nblock, nsamp, seed)
    
     print("\n energy      cv        magn     \n")
-
-    # Animation parameters
-    fig, ax = plt.subplots()
+    
+    #Initial value
     spin_in = np.random.randint(0, 2, [L, L]) * 2 - 1
     print(spin_in)
     # Thermalize the system 
@@ -436,14 +436,16 @@ def clicked_loop():
     
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in, E_spin) = step(spin_in, current_t, J, B, L)
+                (spin_in) = step(spin_in, current_t, J, B, L)
             else:
-                (spin_in, E_spin, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
+                (spin_in, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in, E_spin) = step(spin_in, current_t, J, B, L)
+                (spin_in) = step(spin_in, current_t, J, B, L)
             else:
-                (spin_in, E_spin, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
+                (spin_in, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
+
+
 
             current_M = abs(sum(sum(spin_in)))/L2  
             M_acum = M_acum + abs(current_M)
@@ -451,7 +453,7 @@ def clicked_loop():
             current_M_sq = sum(sum(spin_sq))/L2 
             M_sq_acum = M_sq_acum + current_M_sq
 
-            current_E = sum(sum(E_spin))/(2*L2) 
+            (current_E, E_spin) = compute_energy_ising(spin_in, J, B, L) 
             E_acum = E_acum + current_E
             E_sq = np.multiply(E_spin, E_spin)
             current_E_sq = sum(sum((E_sq)))/(4*L2)
@@ -459,22 +461,24 @@ def clicked_loop():
         print("Temperature: ",current_t,"execution: ",i)    
         #compute thermodinamical variables
         #magnetizaton
-        M.append(current_M)
+        #M.append(current_M)
         #Kappa, magnetic subceptibility
         current_M_mean = M_acum/(ntherm+1)
+        M.append(current_M_mean)
         current_M_sq_mean = M_sq_acum/(ntherm+1)
         M_square_mean.append(current_M_sq_mean)
-        kappa.append(1/(current_t)*(current_M_sq_mean-(current_M_mean*current_M_mean)))
+        kappa.append(L/(current_t)*(current_M_sq_mean-(current_M_mean**2)))
         
         #E= -1/2DeltaE
-        E.append(current_E) 
+        #E.append(current_E) 
         #specific heat
         current_E_mean = E_acum/(ntherm+1)
+        E.append(current_E_mean) 
         current_E_sq_mean = E_sq_acum/(ntherm+1)
         E_square_mean.append(current_E_sq_mean) 
-        C.append(1/((current_t*current_t))*(current_E_sq_mean-(current_E_mean*current_E_mean)))
+        C.append(1/((current_t*current_t))*(current_E_sq_mean-(current_E_mean**2)))
     
-    (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_ising(minimum_t_step, maximum_t_step, t_steps)
+    (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_ising(J, minimum_t_step, maximum_t_step, t_steps)
 
     df = pd.DataFrame()
     df.insert(0,'ts',ts)
@@ -493,14 +497,20 @@ def clicked_loop():
     #clf = sk.pot .LinearRegression()
     #clf.fit(X, Y)
 
-    plot(ts, M, E, C, kappa, cb_montecarlo_condition.get() == 1, True, J, L, ntherm)
+    plot(ts, M, E, C, kappa, cb_montecarlo_condition.get() == 1, True, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps)
 
-def plot(ts, M, E, C, kappa, is_metropolis, is_ising, J, L, ntherm, q = 0):
+def plot(ts, M, E, C, kappa, is_metropolis, is_ising, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, q = 0):
+    if is_ising:
+        (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_ising(J, minimum_t_step, maximum_t_step, t_steps)
+    else:
+        (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_potts(J, q, minimum_t_step, maximum_t_step, t_steps)
     plt.tight_layout()
     plt.subplot(2,2,1)
     plt.plot(ts,M)
+    
     #plt.title('m=f(t)')
     if is_ising: 
+        plt.plot(ts, m_theoretical)
         plt.title("J = {} L = {} ".format(J, L))
     else:
         plt.title("q = {} J = {} L = {} ".format(q, J, L))
@@ -519,6 +529,8 @@ def plot(ts, M, E, C, kappa, is_metropolis, is_ising, J, L, ntherm, q = 0):
 
     plt.subplot(2,2,3) 
     plt.plot(ts,C)    
+    if is_ising: 
+        plt.plot(ts, c_theoretical)
     #plt.title('Specific heat = f(t)')
     plt.xlabel('Temperature') 
     plt.ylabel('Specific Heat per spin')  
@@ -527,6 +539,8 @@ def plot(ts, M, E, C, kappa, is_metropolis, is_ising, J, L, ntherm, q = 0):
 
     plt.subplot(2,2,4) 
     plt.plot(ts,kappa)  
+    if is_ising: 
+        plt.plot(ts,kappa_theoretical)
     #plt.title('Susceptibility = f(t)') 
     plt.xlabel('Temperature') 
     plt.ylabel('Magnetic Susceptibility per spin') 
@@ -580,8 +594,6 @@ def clicked_loop_potts():
    
     print("\n energy      cv        magn     \n")
 
-    # Animation parameters
-    fig, ax = plt.subplots()
     spin_in = np.random.randint(0, q, [L, L])
     print(spin_in)
     # Thermalize the system 
@@ -628,10 +640,10 @@ def clicked_loop_potts():
             current_M_sq = sum(sum(spin_sq))/L2 
             M_sq_acum = M_sq_acum + current_M_sq
 
-            current_E = sum(sum(E_sample))/(L2) # Divide by two because of double counting
+            current_E = sum(sum(E_sample))/(2*L2) # Divide by two because of double counting
             E_acum = E_acum + current_E
             DeltaE_sq = np.multiply(E_sample, E_sample)
-            current_E_sq = sum(sum((DeltaE_sq)))/(L2)
+            current_E_sq = sum(sum((DeltaE_sq)))/(4*L2)
             E_sq_acum = E_sq_acum + current_E_sq
 
             #current_m0 = np.exp(-DeltaE/t_input)
@@ -668,7 +680,7 @@ def clicked_loop_potts():
     df.insert(9,'M_square',M_square_mean)
     df.to_csv("Potts_J{}_q{}_L{}steps{}montecarlo_{}_{}.csv".format(J, q, L,ntherm, cb_montecarlo_condition.get() == 1, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
 
-    plot(ts, M, E, C, kappa, cb_montecarlo_condition.get() == 1, False, J, L, ntherm, q)
+    plot(ts, M, E, C, kappa, cb_montecarlo_condition.get() == 1, False, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, q)
 
 print("Starting simulation")
 
