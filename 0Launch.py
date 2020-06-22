@@ -3,7 +3,7 @@ import subprocess
 import random
 import math
 
-
+from datetime import datetime
 try:
     import numpy as np
 except:
@@ -79,6 +79,40 @@ def step(spin_input, t_input, J_input, B_input, L_input):
 
     return (spin, E_spin_J+E_spin_B)
 
+def compute_energy(spin, J, B, L):
+    # Calculating the total spin of neighbouring cells
+    spin_anterior_x = np.roll(spin,-1, axis=1)
+    spin_anterior_y = np.roll(spin,-1, axis=0)
+    spin_posterior_x = np.roll(spin,1, axis=1)
+    spin_posterior_y = np.roll(spin,1, axis=0)
+    vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
+
+    E_spin_J = -J*(np.multiply(spin, vecinos))
+    E_spin_B = -B*spin
+
+    E_spin = E_spin_J + E_spin_B
+    
+    L2 = L*L
+    E = sum(sum(E_spin))/(2*L2) #divede by 2 because of double counting
+
+    return (E, E_spin)
+
+def step_bad_try(spin_input, t_input, J_input, B_input, L_input):
+    spin_try = np.random.randint(0, 2, [L_input, L_input])*-2 +1
+    
+    (E_actual, E_spin_actual) = compute_energy(spin_input, J_input, B_input, L_input)
+    (E_try, E_spin_try) = compute_energy(spin_try, J_input, B_input, L_input)
+
+    DeltaE = E_try - E_actual
+    #calculate the transition probability
+    p_trans = np.exp(-DeltaE/t_input)
+    # Decide wich transition will occur
+    if  np.random.rand() < p_trans:
+       return (spin_try, E_spin_try)
+    else:
+        return (spin_try, E_spin_actual)
+
+
 def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
     #try a spin with one less value of q
     tryin_spin_first = np.random.randint(0, q-1, [L_input, L_input])
@@ -99,7 +133,7 @@ def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
     #calculate the transition probabilities
     p_trans = np.exp(-DeltaE/t_input)
     # Decide wich transition will occur
-    transitions = ((np.random.rand(L_input, L_input) < p_trans) & np.random.randint(0, 2, [L_input, L_input]))
+    transitions = ((np.random.rand(L_input, L_input) < p_trans) )
     no_transitions = (transitions*-1)+1
     #print (transitions) 
     spin1 = np.multiply(tryin_spin, transitions)
@@ -195,7 +229,7 @@ def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
     new_spin = random.randint(0, q-1)
     while new_spin == sign:
         new_spin = random.randint(0, q-1)
-    P_add = 1 - math.exp(-2 * J_input / t_input)
+    P_add = 1 - np.exp(-2 * J_input / t_input)
     stack = [[x, y]]
     lable = np.ones([L_input, L_input], int)
     lable[x, y] = 0
@@ -453,30 +487,55 @@ def clicked_loop():
     df.insert(7,'kappa_theoretical',kappa_theoretical)
     df.insert(8,'E_square',E_square_mean)
     df.insert(9,'M_square',M_square_mean)
-    df.to_csv('ising.csv')
+    df.to_csv("Ising_J{}_L{}steps{}montecarlo_{}_{}.csv".format(J, L,ntherm, cb_montecarlo_condition.get() == 1, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
 
     # ejecuta el clasificador
     #clf = sk.pot .LinearRegression()
     #clf.fit(X, Y)
 
+    plot(ts, M, E, C, kappa, cb_montecarlo_condition.get() == 1, True, J, L, ntherm)
+
+def plot(ts, M, E, C, kappa, is_metropolis, is_ising, J, L, ntherm, q = 0):
+    plt.tight_layout()
     plt.subplot(2,2,1)
-    plt.title('m=f(t)') 
     plt.plot(ts,M)
-    plt.plot(ts,m_theoretical)
+    #plt.title('m=f(t)')
+    if is_ising: 
+        plt.title("J = {} L = {} ".format(J, L))
+    else:
+        plt.title("q = {} J = {} L = {} ".format(q, J, L))
+    plt.xlabel('Temperature') 
+    plt.ylabel('Magnetization per spin') 
+
+    #plt.plot(ts,m_theoretical)
 
     plt.subplot(2,2,2) 
-    plt.title('e = f(t)') 
     plt.plot(ts,E)
+    #plt.title('e = f(t)') 
+    plt.title("steps = {} montecarlo = {}".format(ntherm, is_metropolis))
+    plt.xlabel('Temperature') 
+    plt.ylabel('Energy per spin') 
+
 
     plt.subplot(2,2,3) 
-    plt.title('C_v = f(t)') 
     plt.plot(ts,C)    
-    plt.plot(ts,c_theoretical/(np.max(c_theoretical)))
+    #plt.title('Specific heat = f(t)')
+    plt.xlabel('Temperature') 
+    plt.ylabel('Specific Heat per spin')  
+    
+    #plt.plot(ts,c_theoretical)
 
     plt.subplot(2,2,4) 
-    plt.title('Magnetization = f(t)') 
     plt.plot(ts,kappa)  
-    plt.plot(ts,kappa_theoretical)
+    #plt.title('Susceptibility = f(t)') 
+    plt.xlabel('Temperature') 
+    plt.ylabel('Magnetic Susceptibility per spin') 
+    if is_ising:
+        title = ("Ising_J{}_L{}steps{}montecarlo_{}_{}.jpg".format(J, L,ntherm, is_metropolis, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
+    else:
+        title = ("Potts_q{}_J{}_L{}steps{}montecarlo_{}_{}.jpg".format(q, J, L,ntherm, is_metropolis, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
+    plt.savefig(title, bbox_inches='tight')
+    #plt.plot(ts,kappa_theoretical)
 
     plt.show()
 
@@ -521,7 +580,7 @@ def clicked_loop_potts():
    
     print("\n energy      cv        magn     \n")
 
-    # Animation paramet, ers
+    # Animation parameters
     fig, ax = plt.subplots()
     spin_in = np.random.randint(0, q, [L, L])
     print(spin_in)
@@ -535,6 +594,7 @@ def clicked_loop_potts():
     kappa = []
     minimum_t_step = int((t/t_steps))
     maximum_t_step = int((t_max/t_steps))
+    
     for t_index in range (minimum_t_step,maximum_t_step):
         current_t = t_index*t_steps
         
@@ -545,6 +605,7 @@ def clicked_loop_potts():
         ts.append(current_t)
         spin_in = np.random.randint(0, q, [L, L])
         #execute step`s
+    
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
                 (spin_in, E_sample) = step_potts(spin_in, current_t, J, B, L, q)
@@ -605,33 +666,9 @@ def clicked_loop_potts():
     df.insert(7,'kappa_theoretical',kappa_theoretical)
     df.insert(8,'E_square',E_square_mean)
     df.insert(9,'M_square',M_square_mean)
-    df.to_csv('ising.csv')
+    df.to_csv("Potts_J{}_q{}_L{}steps{}montecarlo_{}_{}.csv".format(J, q, L,ntherm, cb_montecarlo_condition.get() == 1, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
 
-    # ejecuta el clasificador
-    #clf = sk.pot .LinearRegression()
-    #clf.fit(X, Y)
-
-    plt.subplot(2,2,1)
-    plt.title('m=f(t)') 
-    plt.plot(ts,M)
-    #plt.plot(ts,m_theoretical)
-
-    plt.subplot(2,2,2) 
-    plt.title('e = f(t)') 
-    plt.plot(ts,E)
-
-    plt.subplot(2,2,3) 
-    plt.title('C_v = f(t)') 
-    plt.plot(ts,C)    
-    #plt.plot(ts,c_theoretical)
-
-    plt.subplot(2,2,4) 
-    plt.title('Magnetization = f(t)') 
-    plt.plot(ts,kappa)  
-    #plt.plot(ts,kappa_theoretical)
-
-    plt.show()
-    
+    plot(ts, M, E, C, kappa, cb_montecarlo_condition.get() == 1, False, J, L, ntherm, q)
 
 print("Starting simulation")
 
