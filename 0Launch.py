@@ -37,7 +37,6 @@ ntherm = random.randint(1,32500)
 seed = random.randint(1,32500)
 
 ############################ INITIALISE VARIABLES ############################
-
 def initialise():
     L = int(txt_length.get())
     t = float(txt_temperature.get())
@@ -51,7 +50,6 @@ def initialise():
     return (L, t, t_max, t_steps, L2, ntherm, J, B)
     
 ############################ ISING MODEL ############################
-
 def compute_energy_ising(spin, J, B, L):
     # Calculating the total spin of neighbouring cells
     spin_anterior_x = np.roll(spin,-1, axis=1)
@@ -126,7 +124,6 @@ def compute_theoretical_values_ising(J_input, minimum_t_step, maximum_t_step, t_
     return (m_theoretical, c_theoretical, kappa_theoretical)
 
 ############################ POTTS MODEL ############################
-
 def compute_energy_potts(spin, J, B, L):
     spin_anterior_x = np.roll(spin,-1, axis=1)
     spin_anterior_y = np.roll(spin,-1, axis=0)
@@ -177,7 +174,7 @@ def step_metro_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
 def generate_trying_spin_wolff_potts(input_spin, q):
     new_spin = random.randint(0, q-2)
-    trying_spin = np.mod(input_spin + 
+    trying_spin = np.mod(input_spin + new_spin + 
     +1,q)
     return(trying_spin)
 
@@ -285,9 +282,7 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input, is_potts, q=0):
     cluster_size = L_input * L_input - sum(sum(lable))
 
     return (spin_input, cluster_size)       
-
 ############################ PLOT OBSERVABLES ############################
-
 def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, q = 0):
     is_ising = not is_potts
     if is_potts:
@@ -297,7 +292,7 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
 
     plt.tight_layout()
     plt.subplot(2,2,1)
-    plt.plot(ts,M)
+    plt.plot(ts,M, 'x')
     
     #plt.title('m=f(t)')
     if is_ising: 
@@ -311,7 +306,7 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
     #plt.plot(ts,m_theoretical)
 
     plt.subplot(2,2,2) 
-    plt.plot(ts,E)
+    plt.plot(ts,E, 'x')
     #plt.title('e = f(t)') 
     plt.title("steps = {} montecarlo = {}".format(ntherm, is_metropolis))
     plt.xlabel('Temperature') 
@@ -319,7 +314,7 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
 
 
     plt.subplot(2,2,3) 
-    plt.plot(ts,C)    
+    plt.plot(ts,C, 'x')    
     if is_ising: 
         plt.plot(ts, c_theoretical)
     #plt.title('Specific heat = f(t)')
@@ -329,7 +324,7 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
     #plt.plot(ts,c_theoretical)
 
     plt.subplot(2,2,4) 
-    plt.plot(ts,kappa)  
+    plt.plot(ts,kappa, 'x')  
     if is_ising: 
         plt.plot(ts,kappa_theoretical)
     #plt.title('Susceptibility = f(t)') 
@@ -353,9 +348,17 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
     df.insert(5,'c_theoretical',c_theoretical)
     df.insert(6,'kappa',kappa)
     df.insert(7,'kappa_theoretical',kappa_theoretical)
-    df.insert(8,'E_square',E_square_mean)
-    df.insert(9,'M_square',M_square_mean)        
 
+    if is_potts:
+        model = "Potts_q{}".format(q)
+    else:
+        model = "Ising"
+
+    if is_metropolis:
+        algorithm = "Metropolis"
+    else:
+        algorithm = "Wolff"
+        
     df.to_csv("{}_{}_J{}_L{}steps{}_{}.csv".format(model, algorithm, J, L,ntherm, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
 
 ############################ PERFORM SIMULATION AND VISUALISE SPINS AT FIXED T ############################
@@ -477,35 +480,34 @@ def simul_system_temperature_range(is_metropolis, is_potts):
                 current_M = abs(sum(sum(spin_in)))/L2        
                 (current_E, E_spin) = compute_energy_ising(spin_in, J, B, L)  
 
-            M_acum = M_acum + abs(current_M)
-            spin_sq = np.multiply(spin_in, spin_in)
-            #current_M_sq = sum(sum(spin_sq))/L2 
-            current_M_sq = current_M*current_M
-            M_sq_acum = M_sq_acum + current_M_sq
-                        
+            current_M_sq = current_M**2
+            current_E_sq = current_E**2
+
+            M_acum = M_acum + current_M
             E_acum = E_acum + current_E
-            DeltaE_sq = np.multiply(E_spin, E_spin)
+            M_sq_acum = M_sq_acum + current_M_sq
+            E_sq_acum = E_sq_acum + current_E_sq 
+
+            #spin_sq = np.multiply(spin_in, spin_in)
+            #current_M_sq = sum(sum(spin_sq))/L2                         
+            #DeltaE_sq = np.multiply(E_spin, E_spin)
             #current_E_sq = sum(sum((DeltaE_sq)))/(4*L2)
-            current_E_sq = current_E*current_E
-            E_sq_acum = E_sq_acum + current_E_sq   
+  
         print("Temperature: ",current_t,"execution: ",i)
         #compute thermodinamical variables
-        #magnetizaton
+        #magnetizaton and Energy
         M.append(current_M)
-        #Kappa, magnetic subceptibility
-        current_M_mean = M_acum/(ntherm+1)
-        current_M_sq_mean = M_sq_acum/(ntherm+1)
-
-        M_square_mean.append(current_M_sq_mean)
-        kappa.append(1/(current_t)*(current_M_sq_mean-(current_M_mean**2)))
-        
-        #E= -1/2DeltaE
         E.append(current_E) 
-        #specific heat
-        current_E_mean = E_acum/(ntherm+1)
-        current_E_sq_mean = E_sq_acum/(ntherm+1)
-        E_square_mean.append(current_E_sq_mean) 
-        C.append(1/((current_t*current_t))*(current_E_sq_mean-(current_E_mean**2)))
+             
+        #Calculate average values
+        M_mean = M_acum/(ntherm)
+        M_sq_mean = M_sq_acum/(ntherm)
+        E_mean = E_acum/(ntherm)
+        E_sq_mean = E_sq_acum/(ntherm)           
+
+        #M_square_mean.append(current_M_sq_mean)
+        kappa.append(L/(current_t)*(M_sq_mean-(M_mean**2)))
+        C.append(L2/((current_t**2))*(E_sq_mean-(E_mean**2)))
 
     plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, q)
 
