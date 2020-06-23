@@ -55,7 +55,40 @@ nsamp = 1000
 ntherm = random.randint(1,32500)
 seed = random.randint(1,32500)
 
-def step(spin_input, t_input, J_input, B_input, L_input):
+############################ INITIALISE VARIABLES ############################
+def initialise():
+    L = int(txt_length.get())
+    t = float(txt_temperature.get())
+    ntherm = int(txt_steps_thermal.get())
+    J= float(txt_J.get())
+    B=0
+    t_max = float(txt_temperature_max.get())
+    t_steps = float(txt_steps_t.get())
+    L2 = L*L
+
+    return (L, t, t_max, t_steps, L2, ntherm, J, B)
+    
+############################ ISING MODEL ############################
+
+def compute_energy_ising(spin, J, B, L):
+    # Calculating the total spin of neighbouring cells
+    spin_anterior_x = np.roll(spin,-1, axis=1)
+    spin_anterior_y = np.roll(spin,-1, axis=0)
+    spin_posterior_x = np.roll(spin,1, axis=1)
+    spin_posterior_y = np.roll(spin,1, axis=0)
+    vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
+
+    E_spin_J = -J*(np.multiply(spin, vecinos))
+    E_spin_B = -B*spin
+
+    E_spin = E_spin_J + E_spin_B
+    
+    L2 = L*L
+    E = sum(sum(E_spin))/(2*L2) #divide by 2 because of double counting
+
+    return (E, E_spin)
+    
+def step_metro_ising(spin_input, t_input, J_input, B_input, L_input):
     # Calculating the total spin of neighbouring cells
     spin_anterior_x = np.roll(spin_input,-1, axis=1)
     spin_anterior_y = np.roll(spin_input,-1, axis=0)
@@ -79,40 +112,11 @@ def step(spin_input, t_input, J_input, B_input, L_input):
     
     return (spin)
 
-def compute_energy_ising(spin, J, B, L):
-    # Calculating the total spin of neighbouring cells
-    spin_anterior_x = np.roll(spin,-1, axis=1)
-    spin_anterior_y = np.roll(spin,-1, axis=0)
-    spin_posterior_x = np.roll(spin,1, axis=1)
-    spin_posterior_y = np.roll(spin,1, axis=0)
-    vecinos = spin_anterior_x + spin_anterior_y + spin_posterior_x + spin_posterior_y
+def generate_trying_spin_wolff_ising(input_spin):
+    trying_spin = input_spin*-1
+    return(trying_spin)    
 
-    E_spin_J = -J*(np.multiply(spin, vecinos))
-    E_spin_B = -B*spin
-
-    E_spin = E_spin_J + E_spin_B
-    
-    L2 = L*L
-    E = sum(sum(E_spin))/(2*L2) #divide by 2 because of double counting
-
-    return (E, E_spin)
-
-def step_bad_try(spin_input, t_input, J_input, B_input, L_input):
-    spin_try = np.random.randint(0, 2, [L_input, L_input])*-2 +1
-    
-    (E_actual, E_spin_actual) = compute_energy_ising(spin_input, J_input, B_input, L_input)
-    (E_try, E_spin_try) = compute_energy_ising(spin_try, J_input, B_input, L_input)
-
-    DeltaE = E_try - E_actual
-    #calculate the transition probability
-    p_trans = np.exp(-DeltaE/t_input)
-    # Decide wich transition will occur
-    if  np.random.rand() < p_trans:
-       return (spin_try, E_spin_try)
-    else:
-        return (spin_try, E_spin_actual)
-
-def step_wolff(spin_input, t_input, J_input, B_input, L_input):
+def step_wolff_ising(spin_input, t_input, J_input, B_input, L_input):
 
     # 1. Choose a single site of the lattice for starting to build the cluster, in a random way.
     x = np.random.randint(0, L_input)
@@ -179,6 +183,35 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
   
     return (spin_input, cluster_size)   
 
+def compute_theoretical_values_ising(J_input, minimum_t_step, maximum_t_step, t_steps):
+
+    m_theoretical = []
+    c_theoretical = []
+    kappa_theoretical = []
+    t_critical_theo = 2.26919
+    c_plus = 0.96258
+    c_minus = 0.02554
+
+    for t_index in range (minimum_t_step,maximum_t_step):
+        current_t = t_index*t_steps
+        if current_t < t_critical_theo:
+            current_m_theo = math.pow(1-math.pow(math.sinh(2/current_t),-4),(1/8))
+            current_kappa_theo = 1/t_critical_theo*c_minus*math.pow((t_critical_theo-current_t)/t_critical_theo,-1*(7/4))
+        else:
+            current_m_theo = 0
+            current_kappa_theo = 1/t_critical_theo*c_plus*math.pow((current_t - t_critical_theo)/t_critical_theo,-1*(7/4))
+
+        current_c_theo = -0.4945*math.log(abs((t_critical_theo-current_t)/t_critical_theo))
+
+        m_theoretical.append(current_m_theo)
+        c_theoretical.append(current_c_theo)
+        kappa_theoretical.append(current_kappa_theo)
+        
+        
+    return (m_theoretical, c_theoretical, kappa_theoretical)
+
+############################ POTTS MODEL ############################
+
 def compute_energy_potts(spin, J, B, L):
     spin_anterior_x = np.roll(spin,-1, axis=1)
     spin_anterior_y = np.roll(spin,-1, axis=0)
@@ -197,7 +230,7 @@ def compute_energy_potts(spin, J, B, L):
 
     return (E, E_spin)
 
-def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
+def step_metro_potts(spin_input, t_input, J_input, B_input, L_input, q):
     #try a spin with one less value of q
     tryin_spin_first = np.random.randint(0, q-1, [L_input, L_input])
     tryin_spin = np.mod(spin_input + tryin_spin_first+1,q)
@@ -298,44 +331,11 @@ def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
     return (spin_input, cluster_size)       
 
-def initialise():
-    L = int(txt_length.get())
-    t = float(txt_temperature.get())
-    ntherm = int(txt_steps_thermal.get())
-    J= float(txt_J.get())
-    B=0
-    t_max = float(txt_temperature_max.get())
-    t_steps = float(txt_steps_t.get())
-    L2 = L*L
-
-    return (L, t, t_max, t_steps, L2, ntherm, J, B)
-
-def compute_theoretical_values_ising(J_input, minimum_t_step, maximum_t_step, t_steps):
-
-    m_theoretical = []
-    c_theoretical = []
-    kappa_theoretical = []
-    t_critical_theo = 2.26919
-    c_plus = 0.96258
-    c_minus = 0.02554
-
-    for t_index in range (minimum_t_step,maximum_t_step):
-        current_t = t_index*t_steps
-        if current_t < t_critical_theo:
-            current_m_theo = math.pow(1-math.pow(math.sinh(2/current_t),-4),(1/8))
-            current_kappa_theo = 1/t_critical_theo*c_minus*math.pow((t_critical_theo-current_t)/t_critical_theo,-1*(7/4))
-        else:
-            current_m_theo = 0
-            current_kappa_theo = 1/t_critical_theo*c_plus*math.pow((current_t - t_critical_theo)/t_critical_theo,-1*(7/4))
-
-        current_c_theo = -0.4945*math.log(abs((t_critical_theo-current_t)/t_critical_theo))
-
-        m_theoretical.append(current_m_theo)
-        c_theoretical.append(current_c_theo)
-        kappa_theoretical.append(current_kappa_theo)
-        
-        
-    return (m_theoretical, c_theoretical, kappa_theoretical)
+def generate_trying_spin_wolff_potts(input_spin, q):
+    new_spin = random.randint(0, q-2)
+    tryin_spin = np.mod(input_spin[x,y] + 
+    +1,q)
+   return(trying_spin)
 
 def compute_theoretical_values_potts(J_input, q, minimum_t_step, maximum_t_step, t_steps):
 
@@ -368,6 +368,81 @@ def compute_theoretical_values_potts(J_input, q, minimum_t_step, maximum_t_step,
         
     return (m_theoretical, c_theoretical, kappa_theoretical)
 
+############################ PERFORM A STEP USING WOLFF aLGORITHM ############################
+############################        Both Ising and Potts          ############################
+
+def step_wolff(spin_input, t_input, J_input, B_input, L_input, , is_potts, q=0):
+
+    # 1. Choose a single site of the lattice for starting to build the cluster, in a random way.
+    x = np.random.randint(0, L_input)
+    y = np.random.randint(0, L_input)
+
+    sign = spin_input[x, y]
+    if (is_potts):
+        trying_spin = generate_trying_spin_wolff_potts(sign, q)
+    else:  #Ising
+        trying_spin = generate_trying_spin_wolff_ising(sign)
+        
+    P_add = 1 - math.exp(-2 * J_input / t_input)
+    stack = [[x, y]]
+    lable = np.ones([L_input, L_input], int)
+    lable[x, y] = 0
+
+    # 2. Consider all the links connected to that initial site; the $\ell_{-}$ links are never to be activated; 
+    #    activate the $\ell_{+}$ links with the probability $p_{+}=1-\exp(-2\beta\psi_{-}\psi_{+})$, thus forming a first cluster of sites, 
+    #    that is, updating the cluster from a single site to possibly a few sites.
+    while len(stack) > 0.5:
+
+        # While stack is not empty, pop and flip a spin
+
+        [currentx, currenty] = stack.pop()
+        spin_input[currentx, currenty] = tryin_spin
+
+        # Append neighbor spins
+
+        # Left neighbor
+
+        leftx = (currentx-1)%L_input
+        lefty = currenty
+
+        if (spin_input[leftx, lefty] == sign) and (lable[leftx, lefty]) and (np.random.rand() < P_add):
+            stack.append([leftx, lefty])
+            lable[leftx, lefty] = 0
+
+        # Right neighbor
+
+        rightx = (currentx+1)%L_input
+        righty = currenty
+
+        if (spin_input[rightx, righty] == sign) and (lable[rightx, righty]) and (np.random.rand() < P_add):
+            stack.append([rightx, righty])
+            lable[rightx, righty] = 0
+
+        # Up neighbor
+
+        upx = currentx
+        upy = (currenty-1)%L_input
+
+        if (spin_input[upx, upy] == sign) and (lable[upx, upy]) and (np.random.rand() < P_add):
+            stack.append([upx, upy])
+            lable[upx, upy] = 0
+
+        # Down neighbor
+
+        downx = currentx
+        downy = (currenty+1)%L_input
+
+        if (spin_input[downx, downy] == sign) and lable[downx, downy] and np.random.rand() < P_add:
+            stack.append([downx, downy])
+            lable[downx, downy] = 0
+
+    # cluster size
+
+    cluster_size = L_input * L_input - sum(sum(lable))
+
+    return (spin_input, cluster_size)       
+############################ PLOT OBSERVABLES ############################
+
 def clicked():
     (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
 
@@ -387,10 +462,10 @@ def clicked():
     # Thermalize the system 
     for i in range (0,ntherm):
         if cb_montecarlo_condition.get():
-            (spin_in) = step(spin_in, t, J, B, L)
+            (spin_in) = step_metro_ising(spin_in, t, J, B, L)
         else:
-            (spin_in, cluster_size) = step_wolff(spin_in, t, J, B, L)
-        #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
+            (spin_in, cluster_size) = step_wolff_ising(spin_in, t, J, B, L)
+        #(spin_in, DeltaE) = step_metro_ising(spin_in, t, J, B, L)
 
         ax.cla()
         ax.set_title("frame {}".format(i))
@@ -435,14 +510,14 @@ def clicked_loop():
     
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in) = step(spin_in, current_t, J, B, L)
+                (spin_in) = step_metro_ising(spin_in, current_t, J, B, L)
             else:
-                (spin_in, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
+                (spin_in, cluster_size) = step_wolff_ising(spin_in, current_t, J, B, L)
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in) = step(spin_in, current_t, J, B, L)
+                (spin_in) = step_metro_ising(spin_in, current_t, J, B, L)
             else:
-                (spin_in, cluster_size) = step_wolff(spin_in, current_t, J, B, L)
+                (spin_in, cluster_size) = step_wolff_ising(spin_in, current_t, J, B, L)
 
 
 
@@ -571,10 +646,9 @@ def clicked_potts():
     # Thermalize the system 
     for i in range (0,ntherm):
         if cb_montecarlo_condition.get():
-            (spin_in) = step_potts(spin_in, t, J, B, L, q)
+            (spin_in) = step_metro_potts(spin_in, t, J, B, L, q)
         else:
             (spin_in, cluster_size) = step_wolff_potts(spin_in, t, J, B, L, q)
-        #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
         ax.imshow(spin_in)
@@ -619,13 +693,13 @@ def clicked_loop_potts():
     
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in) = step_potts(spin_in, current_t, J, B, L, q)
+                (spin_in) = step_metro_potts(spin_in, current_t, J, B, L, q)
             else:
                 (spin_in, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
         print("Temperature: ",current_t,"execution: ",i)
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in) = step_potts(spin_in, current_t, J, B, L, q)
+                (spin_in) = step_metro_potts(spin_in, current_t, J, B, L, q)
             else:
                 (spin_in, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
 
