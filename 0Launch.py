@@ -112,46 +112,6 @@ def step_bad_try(spin_input, t_input, J_input, B_input, L_input):
     else:
         return (spin_try, E_spin_actual)
 
-def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
-    #try a spin with one less value of q
-    tryin_spin_first = np.random.randint(0, q-1, [L_input, L_input])
-    tryin_spin = np.mod(spin_input + tryin_spin_first+1,q)
-    # Calculating the total spin of neighbouring cells
-    spin_anterior_x = np.roll(spin_input,-1, axis=1)
-    spin_anterior_y = np.roll(spin_input,-1, axis=0)
-    spin_posterior_x = np.roll(spin_input,1, axis=1)
-    spin_posterior_y = np.roll(spin_input,1, axis=0)
-
-    #Calculate the change in energy of flipping a spin
-    E_spin_J2 = -J_input*((tryin_spin == spin_anterior_x).astype(int) +(tryin_spin == spin_anterior_y).astype(int) + \
-        (tryin_spin == spin_posterior_x).astype(int) + (tryin_spin == spin_posterior_y).astype(int))
-    E_spin_J1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
-        (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))
-    
-    DeltaE = E_spin_J2 -E_spin_J1 
-    #calculate the transition probabilities
-    p_trans = np.exp(-DeltaE/t_input)
-    # Decide wich transition will occur
-    transitions = ((np.random.rand(L_input, L_input) < p_trans) & np.random.randint(0, 2, [L_input, L_input]))
-    no_transitions = (transitions*-1)+1
-    #print (transitions) 
-    spin1 = np.multiply(tryin_spin, transitions)
-    spin2 = np.multiply(spin_input, no_transitions)
-
-    spin = spin1+spin2
-
-    spin_anterior_x = np.roll(spin,-1, axis=1)
-    spin_anterior_y = np.roll(spin,-1, axis=0)
-    spin_posterior_x = np.roll(spin,1, axis=1)
-    spin_posterior_y = np.roll(spin,1, axis=0)
-
-    #Calculate the change in energy of flipping a spin
-    E_spin = -J_input*((spin == spin_anterior_x).astype(int) +(spin == spin_anterior_y).astype(int) + \
-        (spin == spin_posterior_x).astype(int) + (spin == spin_posterior_y).astype(int))   
-    E_spin_B = -B_input*spin
-
-    return (spin, E_spin + E_spin_B)
-
 def step_wolff(spin_input, t_input, J_input, B_input, L_input):
 
     # 1. Choose a single site of the lattice for starting to build the cluster, in a random way.
@@ -219,6 +179,54 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input):
   
     return (spin_input, cluster_size)   
 
+def compute_energy_potts(spin, J, B, L):
+    spin_anterior_x = np.roll(spin,-1, axis=1)
+    spin_anterior_y = np.roll(spin,-1, axis=0)
+    spin_posterior_x = np.roll(spin,1, axis=1)
+    spin_posterior_y = np.roll(spin,1, axis=0)
+
+    #Calculate the change in energy of flipping a spin
+    E_spin_J = -J*((spin == spin_anterior_x).astype(int) +(spin == spin_anterior_y).astype(int) + \
+        (spin == spin_posterior_x).astype(int) + (spin == spin_posterior_y).astype(int))   
+    E_spin_B = -B*spin
+
+    E_spin = E_spin_J + E_spin_B
+    
+    L2 = L*L
+    E = sum(sum(E_spin))/(2*L2) #divide by 2 because of double counting
+
+    return (E, E_spin)
+
+def step_potts(spin_input, t_input, J_input, B_input, L_input, q):
+    #try a spin with one less value of q
+    tryin_spin_first = np.random.randint(0, q-1, [L_input, L_input])
+    tryin_spin = np.mod(spin_input + tryin_spin_first+1,q)
+    # Calculating the total spin of neighbouring cells
+    spin_anterior_x = np.roll(spin_input,-1, axis=1)
+    spin_anterior_y = np.roll(spin_input,-1, axis=0)
+    spin_posterior_x = np.roll(spin_input,1, axis=1)
+    spin_posterior_y = np.roll(spin_input,1, axis=0)
+
+    #Calculate the change in energy of flipping a spin
+    E_spin_J2 = -J_input*((tryin_spin == spin_anterior_x).astype(int) +(tryin_spin == spin_anterior_y).astype(int) + \
+        (tryin_spin == spin_posterior_x).astype(int) + (tryin_spin == spin_posterior_y).astype(int))
+    E_spin_J1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
+        (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))
+    
+    DeltaE = E_spin_J2 -E_spin_J1 
+    #calculate the transition probabilities
+    p_trans = np.exp(-DeltaE/t_input)
+    # Decide wich transition will occur
+    transitions = ((np.random.rand(L_input, L_input) < p_trans) & np.random.randint(0, 2, [L_input, L_input]))
+    no_transitions = (transitions*-1)+1
+    #print (transitions) 
+    spin1 = np.multiply(tryin_spin, transitions)
+    spin2 = np.multiply(spin_input, no_transitions)
+
+    spin = spin1+spin2
+
+    return (spin)
+
 def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
     # 1. Choose a single site of the lattice for starting to build the cluster, in a random way.
@@ -228,7 +236,8 @@ def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
     sign = spin_input[x, y]
 
     new_spin = random.randint(0, q-2)
-    tryin_spin = np.mod(spin_input + new_spin+1,q)
+    tryin_spin = np.mod(spin_input[x,y] + 
+    +1,q)
     
     P_add = 1 - np.exp(-2 * J_input / t_input)
     stack = [[x, y]]
@@ -287,17 +296,7 @@ def step_wolff_potts(spin_input, t_input, J_input, B_input, L_input, q):
 
     cluster_size = L_input * L_input - sum(sum(lable))
 
-    # Calculating the total spin of neighbouring cells
-    spin_anterior_x = np.roll(spin_input,-1, axis=1)
-    spin_anterior_y = np.roll(spin_input,-1, axis=0)
-    spin_posterior_x = np.roll(spin_input,1, axis=1)
-    spin_posterior_y = np.roll(spin_input,1, axis=0)
-    #Calculate the change in energy of flipping a spin
-    E_spin_J1 = -J_input*((spin_input == spin_anterior_x).astype(int) +(spin_input == spin_anterior_y).astype(int) + \
-        (spin_input == spin_posterior_x).astype(int) + (spin_input == spin_posterior_y).astype(int))
-    E_spin_B = B_input*spin_input
-    
-    return (spin_input, E_spin_J1 + E_spin_B, cluster_size)       
+    return (spin_input, cluster_size)       
 
 def initialise():
     L = int(txt_length.get())
@@ -388,9 +387,9 @@ def clicked():
     # Thermalize the system 
     for i in range (0,ntherm):
         if cb_montecarlo_condition.get():
-            (spin_in, E_spin) = step(spin_in, t, J, B, L)
+            (spin_in) = step(spin_in, t, J, B, L)
         else:
-            (spin_in, E_spin, cluster_size) = step_wolff(spin_in, t, J, B, L)
+            (spin_in, cluster_size) = step_wolff(spin_in, t, J, B, L)
         #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
@@ -572,9 +571,9 @@ def clicked_potts():
     # Thermalize the system 
     for i in range (0,ntherm):
         if cb_montecarlo_condition.get():
-            (spin_in, DeltaE) = step_potts(spin_in, t, J, B, L, q)
+            (spin_in) = step_potts(spin_in, t, J, B, L, q)
         else:
-            (spin_in, DeltaE, cluster_size) = step_wolff_potts(spin_in, t, J, B, L, q)
+            (spin_in, cluster_size) = step_wolff_potts(spin_in, t, J, B, L, q)
         #(spin_in, DeltaE) = step(spin_in, t, J, B, L)
 
         ax.cla()
@@ -620,15 +619,15 @@ def clicked_loop_potts():
     
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in, E_sample) = step_potts(spin_in, current_t, J, B, L, q)
+                (spin_in) = step_potts(spin_in, current_t, J, B, L, q)
             else:
-                (spin_in, E_sample, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
+                (spin_in, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
         print("Temperature: ",current_t,"execution: ",i)
         for i in range (0,ntherm):
             if cb_montecarlo_condition.get():
-                (spin_in, E_sample) = step_potts(spin_in, current_t, J, B, L, q)
+                (spin_in) = step_potts(spin_in, current_t, J, B, L, q)
             else:
-                (spin_in, E_sample, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
+                (spin_in, cluster_size) = step_wolff_potts(spin_in, current_t, J, B, L, q)
 
             Ni = []
             for index in range (0,q):
@@ -637,13 +636,15 @@ def clicked_loop_potts():
             current_M = q* (max(Ni)/L2-1)/(q-1)
             M_acum = M_acum + abs(current_M)
             spin_sq = np.multiply(spin_in, spin_in)
-            current_M_sq = sum(sum(spin_sq))/L2 
+            #current_M_sq = sum(sum(spin_sq))/L2 
+            current_M_sq = current_M*current_M
             M_sq_acum = M_sq_acum + current_M_sq
 
-            current_E = sum(sum(E_sample))/(2*L2) # Divide by two because of double counting
+            (current_E, E_sample) = compute_energy_potts(spin_in, current_t, B, L)
             E_acum = E_acum + current_E
             DeltaE_sq = np.multiply(E_sample, E_sample)
-            current_E_sq = sum(sum((DeltaE_sq)))/(4*L2)
+            #current_E_sq = sum(sum((DeltaE_sq)))/(4*L2)
+            current_E_sq = current_E*current_E
             E_sq_acum = E_sq_acum + current_E_sq
 
             #current_m0 = np.exp(-DeltaE/t_input)
