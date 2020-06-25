@@ -2,6 +2,7 @@ import sys
 import subprocess
 import random
 import math
+import getopt
 
 from datetime import datetime
 try:
@@ -35,6 +36,104 @@ nblock=1
 nsamp = 1000
 ntherm = random.randint(1,32500)
 seed = random.randint(1,32500)
+
+window = tk.Tk()
+window.title("Ising Model")
+window.geometry('800x200')
+
+lbl_length = tk.Label(window, text="Grid length (L)")
+lbl_length.grid(column=0, row=0) 
+txt_length = tk.Entry(window,width=10)
+txt_length.grid(column=0, row=1) 
+txt_length.insert(0,100)
+
+lbl_steps_thermal = tk.Label(window, text="Steps")
+lbl_steps_thermal.grid(column=1, row=0) 
+txt_steps_thermal = tk.Entry(window,width=10)
+txt_steps_thermal.grid(column=1, row=1)    
+txt_steps_thermal.insert(0, 100)
+
+lbl_J = tk.Label(window, text="J")
+lbl_J.grid(column=2, row=0) 
+txt_J = tk.Entry(window,width=10)
+txt_J.grid(column=2, row=1)    
+txt_J.insert(0, 1)
+
+lbl_temperature = tk.Label(window, text="Normalized Temperature [Minimum]")
+lbl_temperature.grid(column=0, row=2) 
+txt_temperature = tk.Entry(window,width=10)
+txt_temperature.grid(column=0, row=3)    
+txt_temperature.insert(0, 1.4)    
+
+lbl_temperature_max = tk.Label(window, text="Normalized Maximum Temperature")
+lbl_temperature_max.grid(column=1, row=2) 
+txt_temperature_max = tk.Entry(window,width=10)
+txt_temperature_max.grid(column=1, row=3)    
+txt_temperature_max.insert(0, 3)
+
+lbl_steps_t = tk.Label(window, text="Temperature step increment")
+lbl_steps_t.grid(column=2, row=2) 
+txt_steps_t = tk.Entry(window,width=10)
+txt_steps_t.grid(column=2, row=3)    
+txt_steps_t.insert(0, 0.001)    
+
+lbl_temperature_max = tk.Label(window, text="Normalized Maximum Temperature")
+lbl_temperature_max.grid(column=1, row=2) 
+txt_temperature_max = tk.Entry(window,width=10)
+txt_temperature_max.grid(column=1, row=3)    
+txt_temperature_max.insert(0, 3)
+
+lbl_steps_t = tk.Label(window, text="Temperature step increment")
+lbl_steps_t.grid(column=2, row=2) 
+txt_steps_t = tk.Entry(window,width=10)
+txt_steps_t.grid(column=2, row=3)    
+txt_steps_t.insert(0, 0.01)    
+
+cb_montecarlo_condition = tk.IntVar()
+C1 = tk.Checkbutton(window, text = "Select Montecarlo method, Wolff by default", variable = cb_montecarlo_condition, \
+                onvalue = 1, offvalue = 0)
+C1.grid(column=0, row =4)
+
+lbl_size_potts = tk.Label(window, text="q potts model")
+lbl_size_potts.grid(column=1, row=4) 
+txt_size_potts = tk.Entry(window,width=10)
+txt_size_potts.grid(column=1, row=5)   
+txt_size_potts.insert(0, 2)  
+
+############################ BUTTOMS CALLED FUNCTIONS ############################
+def clicked():
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
+    q=0
+    is_montecarlo = cb_montecarlo_condition.get()
+    simul_system_fixed_temperature(is_montecarlo, False,  L, t, t_max, t_steps, L2, ntherm, J, B, q)
+
+def clicked_loop():
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
+    q=0
+    simul_system_temperature_range(cb_montecarlo_condition.get(), False, L, t, t_max, t_steps, L2, ntherm, J, B, 0, True)
+ 
+def clicked_potts():
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
+    q=int(txt_size_potts.get())
+    simul_system_fixed_temperature(cb_montecarlo_condition.get(), True, L, t, t_max, t_steps, L2, ntherm, J, B, q)
+
+def clicked_loop_potts():
+    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
+    q=int(txt_size_potts.get())
+    simul_system_temperature_range(cb_montecarlo_condition.get(), True, L, t, t_max, t_steps, L2, ntherm, J, B, q, True)
+
+
+btn = tk.Button(window, text="Ising Simulation only minimum temperature", command=clicked)
+btn.grid(column=0, row=7)
+
+btn_loop = tk.Button(window, text="Start continuous simulation", command=clicked_loop)
+btn_loop.grid(column=1, row=7)
+
+btn_potts = tk.Button(window, text="Potts simulation only minimum temperature", command=clicked_potts)
+btn_potts.grid(column=0, row=8)
+
+btn_potts_loop = tk.Button(window, text="Start Potss continuous simulation", command=clicked_loop_potts)
+btn_potts_loop.grid(column=1, row=8)
 
 ############################ INITIALISE VARIABLES ############################
 def initialise():
@@ -221,10 +320,11 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input, is_potts, q=0):
     sign = spin_input[x, y]
     if (is_potts):
         trying_spin = generate_trying_spin_wolff_potts(sign, q)
+        P_add = 1 - math.exp(-1 * J_input / t_input)
     else:  #Ising
         trying_spin = generate_trying_spin_wolff_ising(sign)
+        P_add = 1 - math.exp(-2 * J_input / t_input)
 
-    P_add = 1 - math.exp(-2 * J_input / t_input)
     stack = [[x, y]]
     lable = np.ones([L_input, L_input], int)
     lable[x, y] = 0
@@ -283,61 +383,12 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input, is_potts, q=0):
 
     return (spin_input, cluster_size)       
 ############################ PLOT OBSERVABLES ############################
-def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, q = 0):
+def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, show, q = 0):
     is_ising = not is_potts
     if is_potts:
         (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_potts(J, q, minimum_t_step, maximum_t_step, t_steps)
     else:
         (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_ising(J, minimum_t_step, maximum_t_step, t_steps)
-
-    plt.tight_layout()
-    plt.subplot(2,2,1)
-    plt.plot(ts,M, 'x')
-    
-    #plt.title('m=f(t)')
-    if is_ising: 
-        plt.plot(ts, m_theoretical)
-        plt.title("J = {} L = {} ".format(J, L))
-    else:
-        plt.title("q = {} J = {} L = {} ".format(q, J, L))
-    plt.xlabel('Temperature') 
-    plt.ylabel('Magnetization per spin') 
-
-    #plt.plot(ts,m_theoretical)
-
-    plt.subplot(2,2,2) 
-    plt.plot(ts,E, 'x')
-    #plt.title('e = f(t)') 
-    plt.title("steps = {} montecarlo = {}".format(ntherm, is_metropolis))
-    plt.xlabel('Temperature') 
-    plt.ylabel('Energy per spin') 
-
-
-    plt.subplot(2,2,3) 
-    plt.plot(ts,C, 'x')    
-    if is_ising: 
-        plt.plot(ts, c_theoretical)
-    #plt.title('Specific heat = f(t)')
-    plt.xlabel('Temperature') 
-    plt.ylabel('Specific Heat per spin')  
-    
-    #plt.plot(ts,c_theoretical)
-
-    plt.subplot(2,2,4) 
-    plt.plot(ts,kappa, 'x')  
-    if is_ising: 
-        plt.plot(ts,kappa_theoretical)
-    #plt.title('Susceptibility = f(t)') 
-    plt.xlabel('Temperature') 
-    plt.ylabel('Magnetic Susceptibility per spin') 
-    if is_ising:
-        title = ("Ising_J{}_L{}steps{}montecarlo_{}_{}.jpg".format(J, L,ntherm, is_metropolis, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
-    else:
-        title = ("Potts_q{}_J{}_L{}steps{}montecarlo_{}_{}.jpg".format(q, J, L,ntherm, is_metropolis, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
-    plt.savefig(title, bbox_inches='tight')
-    #plt.plot(ts,kappa_theoretical)
-
-    plt.show()
 
     df = pd.DataFrame()
     df.insert(0,'ts',ts)
@@ -361,18 +412,70 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
         
     df.to_csv("{}_{}_J{}_L{}steps{}_{}.csv".format(model, algorithm, J, L,ntherm, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
 
-############################ PERFORM SIMULATION AND VISUALISE SPINS AT FIXED T ############################
-def simul_system_fixed_temperature(is_metropolis, is_potts):
+    plt.tight_layout()
+    plt.subplot(2,2,1)
+    plt.plot(ts,M)
     
-    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
+    #plt.title('m=f(t)')
+    if is_ising: 
+        plt.plot(ts, m_theoretical)
+        plt.title("J = {} L = {} ".format(J, L))
+    else:
+        plt.title("q = {} J = {} L = {} ".format(q, J, L))
+    plt.xlabel('Temperature') 
+    plt.ylabel('Magnetization per spin') 
+
+    #plt.plot(ts,m_theoretical)
+
+    plt.subplot(2,2,2) 
+    plt.plot(ts,E)
+    #plt.title('e = f(t)') 
+    plt.title("steps = {} montecarlo = {}".format(ntherm, is_metropolis))
+    plt.xlabel('Temperature') 
+    plt.ylabel('Energy per spin') 
+
+
+    plt.subplot(2,2,3) 
+    plt.plot(ts,C)    
+    if is_ising: 
+        plt.plot(ts, c_theoretical)
+    #plt.title('Specific heat = f(t)')
+    plt.xlabel('Temperature') 
+    plt.ylabel('Specific Heat per spin')  
+    
+    #plt.plot(ts,c_theoretical)
+
+    plt.subplot(2,2,4) 
+    plt.plot(ts,kappa)  
+    if is_ising: 
+        plt.plot(ts,kappa_theoretical)
+    #plt.title('Susceptibility = f(t)') 
+    plt.xlabel('Temperature') 
+    plt.ylabel('Magnetic Susceptibility per spin') 
+    if is_ising:
+        title = ("Ising_J{}_L{}steps{}montecarlo_{}_{}.jpg".format(J, L,ntherm, is_metropolis, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
+    else:
+        title = ("Potts_q{}_J{}_L{}steps{}montecarlo_{}_{}.jpg".format(q, J, L,ntherm, is_metropolis, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
+    plt.savefig(title, bbox_inches='tight')
+    #plt.plot(ts,kappa_theoretical)
+    
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+
+############################ PERFORM SIMULATION AND VISUALISE SPINS AT FIXED T ############################
+def simul_system_fixed_temperature(is_metropolis, is_potts, L, t, t_max, t_steps, L2, ntherm, J, B, q):
+    
+    #(L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
     if (is_potts):
-        q=int(txt_size_potts.get())
+        
         model = "Potts q={}".format(q)
         spin_in = np.random.randint(0, q, [L, L])
     else:
         model = "Ising"
         spin_in = np.random.randint(0, 2, [L, L]) * 2 - 1
-        q=0
     if is_metropolis:
         algorithm = "metropolis"
  
@@ -404,18 +507,13 @@ def simul_system_fixed_temperature(is_metropolis, is_potts):
         plt.pause(0.00001)
 
 ############################ PERFORM SIMULATION IN A RANGE OF TS AND COMPUTE THERMODINAMIC VARIABLES ############################
-def simul_system_temperature_range(is_metropolis, is_potts):
-
-    (L, t, t_max, t_steps, L2, ntherm, J, B) = initialise()
-
+def simul_system_temperature_range(is_metropolis, is_potts, L, t, t_max, t_steps, L2, ntherm, J, B, q, show):
     if (is_potts):
-        q=int(txt_size_potts.get())
         model = "Potts q={}".format(q)
         spin_in = np.random.randint(0, q, [L, L])
     else: #Ising
         model = "Ising"
         spin_in = np.random.randint(0, 2, [L, L]) * 2 - 1
-        q=0
     if is_metropolis:
         algorithm = "metropolis"
     else: #Wolff
@@ -429,9 +527,7 @@ def simul_system_temperature_range(is_metropolis, is_potts):
     print(spin_in)
     # Thermalize the system 
     M = []
-    M_square_mean = []
     E = []
-    E_square_mean = []  #E^2
     C = []  #Specific Heat
     ts = []
     kappa = []
@@ -446,7 +542,10 @@ def simul_system_temperature_range(is_metropolis, is_potts):
         E_acum = 0
         E_sq_acum =0
         ts.append(current_t)
-        spin_in = np.ones((L,L))*-1
+        if (is_potts):
+            spin_in = np.random.randint(0, q, [L, L])
+        else:
+            spin_in = np.ones((L,L))*-1
 
         #Thermalise the system
         for i in range (0,ntherm):
@@ -506,99 +605,63 @@ def simul_system_temperature_range(is_metropolis, is_potts):
         E_sq_mean = E_sq_acum/(ntherm)           
 
         #M_square_mean.append(current_M_sq_mean)
-        kappa.append(L/(current_t)*(M_sq_mean-(M_mean**2)))
-        C.append(L2/((current_t**2))*(E_sq_mean-(E_mean**2)))
+        kappa.append(L**2/(current_t)*(M_sq_mean-(M_mean**2)))
+        C.append(L**2/((current_t**2))*(E_sq_mean-(E_mean**2)))
 
-    plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, q)
+    plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, show, q)
 
-############################ BUTTOMS CALLED FUNCTIONS ############################
-def clicked():
-    simul_system_fixed_temperature(cb_montecarlo_condition.get(), False)
+def launch_graphical_interface():
 
-def clicked_loop():
-    simul_system_temperature_range(cb_montecarlo_condition.get(), False)
- 
-def clicked_potts():
-     simul_system_fixed_temperature(cb_montecarlo_condition.get(), True)
+    print("Launching graphical interface")
 
-def clicked_loop_potts():
-    simul_system_temperature_range(cb_montecarlo_condition.get(), True)
+    window.mainloop()
 
-print("Starting simulation")
+def execute(csv_file):
+    import csv
+    with open(csv_file) as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            L = int(row['L'])
+            t = float(row['t'])
+            t_max = float(row['t_max'])
+            t_steps = float(row['t_steps'])
+            L2 = L*L
+            ntherm = int(row['ntherm'])
+            J = float(row['J'])
+            B = float(row['B'])
+            q = int(row['q'])
+            if row['model'] == "ising" and row['algorithm'] == "metro":
+                simul_system_temperature_range(True, False, L, t, t_max, t_steps, L2, ntherm, J, B, 0, False)
+            elif row['model'] == "ising" and row['algorithm'] == "wolff":
+                simul_system_temperature_range(False, False, L, t, t_max, t_steps, L2, ntherm, J, B, 0, False)
+            elif row['model'] == "potts" and row['algorithm'] == "metro":
+                simul_system_temperature_range(True, True, L, t, t_max, t_steps, L2, ntherm, J, B, q, False)
+            elif row['model'] == "potts" and row['algorithm'] == "wolff":
+                simul_system_temperature_range(False, True, L, t, t_max, t_steps, L2, ntherm, J, B, q, False)
+            else:
+                print ("The format of the csv file is not correct")
+                sys.exit(3)     
 
-window = tk.Tk()
-window.title("Ising Model")
-window.geometry('800x200')
+def usage():
+    print (" Options:\n   --help (-h)\t\tPrint this help \n --graphical (-g)\t\tLaunch graphical interface \n  --file (-f)\t\tName of the csv file to read \n ")
 
-lbl_length = tk.Label(window, text="Grid length (L)")
-lbl_length.grid(column=0, row=0) 
-txt_length = tk.Entry(window,width=10)
-txt_length.grid(column=0, row=1) 
-txt_length.insert(0,100)
+def main(argv): 
+    try:      
+        opts, args = getopt.getopt(argv, "hgf:", ["help, ""graphical", "file="])
+    except getopt.GetoptError:          
+        print ("Not valid option")
+        usage()                         
+        sys.exit(2)  
+    for opt, arg in opts:                
+        if opt in ("-h", "--help"):      
+            usage()                     
+            sys.exit()                  
+        elif opt in ('-g', "--graphical"):                
+            launch_graphical_interface()             
+        elif opt in ("-f", "--file"):          
+            csv_file = arg   
+            execute(csv_file)
 
-lbl_steps_thermal = tk.Label(window, text="Steps")
-lbl_steps_thermal.grid(column=1, row=0) 
-txt_steps_thermal = tk.Entry(window,width=10)
-txt_steps_thermal.grid(column=1, row=1)    
-txt_steps_thermal.insert(0, 100)
+if __name__=='__main__':
+ main(sys.argv[1:])
 
-lbl_J = tk.Label(window, text="J")
-lbl_J.grid(column=2, row=0) 
-txt_J = tk.Entry(window,width=10)
-txt_J.grid(column=2, row=1)    
-txt_J.insert(0, 1)
-
-lbl_temperature = tk.Label(window, text="Normalized Temperature [Minimum]")
-lbl_temperature.grid(column=0, row=2) 
-txt_temperature = tk.Entry(window,width=10)
-txt_temperature.grid(column=0, row=3)    
-txt_temperature.insert(0, 1.4)    
-
-lbl_temperature_max = tk.Label(window, text="Normalized Maximum Temperature")
-lbl_temperature_max.grid(column=1, row=2) 
-txt_temperature_max = tk.Entry(window,width=10)
-txt_temperature_max.grid(column=1, row=3)    
-txt_temperature_max.insert(0, 3)
-
-lbl_steps_t = tk.Label(window, text="Temperature step increment")
-lbl_steps_t.grid(column=2, row=2) 
-txt_steps_t = tk.Entry(window,width=10)
-txt_steps_t.grid(column=2, row=3)    
-txt_steps_t.insert(0, 0.001)    
-
-lbl_temperature_max = tk.Label(window, text="Normalized Maximum Temperature")
-lbl_temperature_max.grid(column=1, row=2) 
-txt_temperature_max = tk.Entry(window,width=10)
-txt_temperature_max.grid(column=1, row=3)    
-txt_temperature_max.insert(0, 3)
-
-lbl_steps_t = tk.Label(window, text="Temperature step increment")
-lbl_steps_t.grid(column=2, row=2) 
-txt_steps_t = tk.Entry(window,width=10)
-txt_steps_t.grid(column=2, row=3)    
-txt_steps_t.insert(0, 0.01)    
-
-cb_montecarlo_condition = tk.IntVar()
-C1 = tk.Checkbutton(window, text = "Select Montecarlo method, Wolff by default", variable = cb_montecarlo_condition, \
-                 onvalue = 1, offvalue = 0)
-C1.grid(column=0, row =4)
-
-lbl_size_potts = tk.Label(window, text="q potts model")
-lbl_size_potts.grid(column=1, row=4) 
-txt_size_potts = tk.Entry(window,width=10)
-txt_size_potts.grid(column=1, row=5)   
-txt_size_potts.insert(0, 2)  
-
-btn = tk.Button(window, text="Ising Simulation only minimum temperature", command=clicked)
-btn.grid(column=0, row=7)
-
-btn_loop = tk.Button(window, text="Start continuous simulation", command=clicked_loop)
-btn_loop.grid(column=1, row=7)
-
-btn_potts = tk.Button(window, text="Potts simulation only minimum temperature", command=clicked_potts)
-btn_potts.grid(column=0, row=8)
-
-btn_potts_loop = tk.Button(window, text="Start Potss continuous simulation", command=clicked_loop_potts)
-btn_potts_loop.grid(column=1, row=8)
-
-window.mainloop()
