@@ -3,7 +3,10 @@ import subprocess
 import random
 import math
 import getopt
+import os
+import errno
 
+from PIL import Image
 from datetime import datetime
 try:
     import numpy as np
@@ -383,7 +386,8 @@ def step_wolff(spin_input, t_input, J_input, B_input, L_input, is_potts, q=0):
 
     return (spin_input, cluster_size)       
 ############################ PLOT OBSERVABLES ############################
-def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, show, q = 0):
+def plot_and_save(dir, ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, show, q = 0):
+
     is_ising = not is_potts
     if is_potts:
         (m_theoretical, c_theoretical, kappa_theoretical) = compute_theoretical_values_potts(J, q, minimum_t_step, maximum_t_step, t_steps)
@@ -410,13 +414,12 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
     else:
         algorithm = "Wolff"
         
-    df.to_csv("{}_{}_J{}_L{}steps{}_{}.csv".format(model, algorithm, J, L,ntherm, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
+    df.to_csv("{}\{}_{}_J{}_L{}steps{}_{}.csv".format(dir, model, algorithm, J, L,ntherm, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
 
     plt.tight_layout()
+
     plt.subplot(2,2,1)
     plt.plot(ts,M)
-    
-    #plt.title('m=f(t)')
     if is_ising: 
         plt.plot(ts, m_theoretical)
         plt.title("J = {} L = {} ".format(J, L))
@@ -425,11 +428,8 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
     plt.xlabel('Temperature') 
     plt.ylabel('Magnetization per spin') 
 
-    #plt.plot(ts,m_theoretical)
-
     plt.subplot(2,2,2) 
     plt.plot(ts,E)
-    #plt.title('e = f(t)') 
     plt.title("steps = {} montecarlo = {}".format(ntherm, is_metropolis))
     plt.xlabel('Temperature') 
     plt.ylabel('Energy per spin') 
@@ -439,31 +439,23 @@ def plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, min
     plt.plot(ts,C)    
     if is_ising: 
         plt.plot(ts, c_theoretical)
-    #plt.title('Specific heat = f(t)')
     plt.xlabel('Temperature') 
     plt.ylabel('Specific Heat per spin')  
     
-    #plt.plot(ts,c_theoretical)
-
     plt.subplot(2,2,4) 
     plt.plot(ts,kappa)  
     if is_ising: 
         plt.plot(ts,kappa_theoretical)
-    #plt.title('Susceptibility = f(t)') 
     plt.xlabel('Temperature') 
     plt.ylabel('Magnetic Susceptibility per spin') 
-    if is_ising:
-        title = ("Ising_J{}_L{}steps{}montecarlo_{}_{}.jpg".format(J, L,ntherm, is_metropolis, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
-    else:
-        title = ("Potts_q{}_J{}_L{}steps{}montecarlo_{}_{}.jpg".format(q, J, L,ntherm, is_metropolis, datetime.now().strftime('%Y-%m-%d_%H-%M-%S')))
+
+    title = '{}\observables_t.jpg'.format(dir)
     plt.savefig(title, bbox_inches='tight')
-    #plt.plot(ts,kappa_theoretical)
     
     if show:
         plt.show()
     else:
         plt.close()
-
 
 ############################ PERFORM SIMULATION AND VISUALISE SPINS AT FIXED T ############################
 def simul_system_fixed_temperature(is_metropolis, is_potts, L, t, t_max, t_steps, L2, ntherm, J, B, q):
@@ -525,6 +517,14 @@ def simul_system_temperature_range(is_metropolis, is_potts, L, t, t_max, t_steps
     print(ntherm, nblock, nsamp, seed)    
 
     print(spin_in)
+
+    dir = '{}_{}_L{}_J{}_B{}_S{}_t{}_{}_st{}_{}'.format(model, algorithm, L, J, B, ntherm, t, t_max, t_steps, datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+    try:
+        os.mkdir(dir)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+
     # Thermalize the system 
     M = []
     E = []
@@ -573,7 +573,7 @@ def simul_system_temperature_range(is_metropolis, is_potts, L, t, t_max, t_steps
                     Ni.append((spin_in == index).sum())
                 current_M = q* (max(Ni)/L2-1)/(q-1)     
                 
-                (current_E, E_spin) = compute_energy_potts(spin_in, current_t, B, L)
+                (current_E, E_spin) = compute_energy_potts(spin_in, J, B, L)
  
             else:  #Ising
                 current_M = abs(sum(sum(spin_in)))/L2        
@@ -608,7 +608,14 @@ def simul_system_temperature_range(is_metropolis, is_potts, L, t, t_max, t_steps
         kappa.append(L**2/(current_t)*(M_sq_mean-(M_mean**2)))
         C.append(L**2/((current_t**2))*(E_sq_mean-(E_mean**2)))
 
-    plot_and_save(ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, show, q)
+        filename = '{}\{}_Frame_T{}'.format(dir, t_index, current_t)
+        np.save(filename, spin_in)
+
+        rescaled = (255.0 / spin_in.max() * (spin_in - spin_in.min())).astype(np.uint8)
+        im = Image.fromarray(rescaled)
+        im.save('{}.png'.format(filename))
+
+    plot_and_save(dir, ts, M, E, C, kappa, is_metropolis, is_potts, J, L, ntherm, minimum_t_step, maximum_t_step, t_steps, show, q)
 
 def launch_graphical_interface():
 
